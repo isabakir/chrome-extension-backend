@@ -1,0 +1,22 @@
+{
+  "name": "freshchat-qdrant-integration",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Integration between Freshchat and Qdrant with OpenAI processing",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.7.0",
+    "axios": "^1.6.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.18.2",
+    "node-cron": "^3.0.3",
+    "openai": "^4.28.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+}

@@ -12,6 +12,23 @@ import FormData from "form-data";
 import fetch from "node-fetch";
 import { v2 as cloudinary } from "cloudinary";
 import sharp from "sharp";
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
+import { Server } from "socket.io";
+import http from "http";
+import flamingoRouter from "./flamingo/index.js";
+
+// Express app ve HTTP server oluştur
+const app = express();
+const server = http.createServer(app);
+
+// Socket.IO yapılandırması
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
 
 // Cloudinary yapılandırması
 cloudinary.config({
@@ -45,8 +62,6 @@ async function optimizeImage(base64Image) {
   }
 }
 
-const app = express();
-
 // CORS ayarları
 app.use(
   cors({
@@ -55,6 +70,7 @@ app.use(
       "https://flalingo.myfreshworks.com",
       "http://localhost:3000",
       "chrome-extension://*",
+      "https://globaleducationtechnologyllc-a0a742a7edcc2d017188649.freshchat.com",
     ],
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -65,8 +81,38 @@ app.use(
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+// Rate limiter middleware
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 200,
+  standardHeaders: "draft-6",
+  legacyHeaders: false,
+  message: "Too many requests from this IP, please try again later.",
+});
+
+// Helmet middleware for security
+app.use(helmet());
+
+// Socket.IO'yu request nesnesine ekle
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
 // Initialize webhook routes
 app.use("/webhooks", freshchatWebhook);
+
+// Flamingo route'unu ekle
+app.use("/test-flamingo", flamingoRouter);
+
+// Socket.IO bağlantı yönetimi
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
+  });
+});
 
 // New endpoint to trigger historical data import
 app.get("/api/import-historical", async (req, res) => {
@@ -257,7 +303,9 @@ app.post("/api/sendGoogleChat", async (req, res) => {
 });
 
 const PORT = config.port || 3000;
-app.listen(PORT, () => {
+
+// Sunucuyu başlat
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   initialize();
 });

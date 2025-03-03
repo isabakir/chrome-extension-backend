@@ -4,7 +4,7 @@ import { config } from "../config.js";
 const freshchatApi = axios.create({
   baseURL: `https://${process.env.FRESHCHAT_DOMAIN}`,
   headers: {
-    Authorization: `Bearer ${process.env.FRESHCHAT_API_TOKEN}`,
+    Authorization: `Bearer ${process.env.FRESHCHAT_API_KEY}`,
     "Content-Type": "application/json",
     Accept: "application/json",
   },

@@ -26,7 +26,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   },
@@ -35,6 +35,15 @@ const io = new Server(server, {
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
+  handlePreflightRequest: (req, res) => {
+    res.writeHead(200, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Credentials": true,
+    });
+    res.end();
+  },
 });
 
 // Cloudinary yapılandırması
@@ -348,10 +357,9 @@ app.post("/api/sendGoogleChat", async (req, res) => {
   }
 });
 
-const PORT = config.port || 3000;
-
 // Sunucuyu başlat
-server.listen(PORT, () => {
+const PORT = process.env.PORT || 3005;
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server is running on port ${PORT}`);
   initialize();
 });

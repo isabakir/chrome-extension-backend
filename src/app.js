@@ -27,7 +27,14 @@ const io = new Server(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   },
+  path: "/socket.io/",
+  transports: ["websocket", "polling"],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 
 // Cloudinary yapılandırması
@@ -72,8 +79,9 @@ app.use(
       "chrome-extension://*",
       "https://globaleducationtechnologyllc-a0a742a7edcc2d017188649.freshchat.com",
     ],
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
@@ -99,8 +107,32 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize webhook routes
-app.use("/webhooks", freshchatWebhook);
+// Rate limiter'ı webhook route'una uygula
+app.use("/webhooks", limiter);
+
+// Initialize webhook routes with proper error handling
+app.use(
+  "/webhooks",
+  (req, res, next) => {
+    console.log("Webhook request received:", {
+      method: req.method,
+      path: req.path,
+      body: req.body,
+      headers: req.headers,
+    });
+    next();
+  },
+  freshchatWebhook
+);
+
+// Error handling middleware for webhooks
+app.use("/webhooks", (err, req, res, next) => {
+  console.error("Webhook error:", err);
+  res.status(500).json({
+    error: "Internal Server Error",
+    message: err.message,
+  });
+});
 
 // Flamingo route'unu ekle
 app.use("/test-flamingo", flamingoRouter);
@@ -109,8 +141,22 @@ app.use("/test-flamingo", flamingoRouter);
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  socket.on("disconnect", () => {
-    console.log("Client disconnected:", socket.id);
+  // Test mesajı gönder
+  socket.emit("test", { message: "Bağlantı başarılı!" });
+
+  // Mesaj alma
+  socket.on("message", (data) => {
+    console.log("Mesaj alındı:", data);
+    // Mesajı diğer bağlı clientlara ilet
+    socket.broadcast.emit("message", data);
+  });
+
+  socket.on("error", (error) => {
+    console.error("Socket error:", error);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.log("Client disconnected:", socket.id, "Reason:", reason);
   });
 });
 

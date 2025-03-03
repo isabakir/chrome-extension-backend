@@ -1,27 +1,29 @@
 import axios from "axios";
 import { config } from "../config.js";
 
+const freshchatApi = axios.create({
+  baseURL: `https://${process.env.FRESHCHAT_DOMAIN}`,
+  headers: {
+    Authorization: `Bearer ${process.env.FRESHCHAT_API_TOKEN}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  },
+});
+
 class FreshchatService {
   constructor() {
-    const baseURL = `https://${config.freshchat.domain}`;
-    console.log("Initializing Freshchat service with baseURL:", baseURL);
-
-    this.client = axios.create({
-      baseURL: baseURL,
-      headers: {
-        Authorization: `Bearer ${config.freshchat.apiKey}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-    });
+    console.log(
+      "Initializing Freshchat service with baseURL:",
+      freshchatApi.defaults.baseURL
+    );
 
     // Add request interceptor for debugging
-    this.client.interceptors.request.use((request) => {
+    freshchatApi.interceptors.request.use((request) => {
       return request;
     });
 
     // Add response interceptor for debugging
-    this.client.interceptors.response.use(
+    freshchatApi.interceptors.response.use(
       (response) => {
         return response;
       },
@@ -87,7 +89,7 @@ class FreshchatService {
     while (i < 10) {
       i++;
       try {
-        const response = await this.client.get("/v2/users", {
+        const response = await freshchatApi.get("/v2/users", {
           params: {
             created_from: "2024-10-01T00:00:00Z", //UTC Format From 1st October 2024, can be changed to any date
             page: page,
@@ -137,7 +139,7 @@ class FreshchatService {
     while (i < 10) {
       i++;
       try {
-        const response = await this.client.get(
+        const response = await freshchatApi.get(
           `/v2/users/${userId}/conversations`
         );
 
@@ -147,7 +149,7 @@ class FreshchatService {
         // Fetch messages for each conversation if not included
         for (let conversation of userConversations) {
           //check if conversation is resolved
-          const conversationObj = await this.client.get(
+          const conversationObj = await freshchatApi.get(
             `/v2/conversations/${conversation.id}`
           );
           conversation.is_resolved = conversationObj.data.status;
@@ -156,7 +158,7 @@ class FreshchatService {
           conversation.user_id = userId;
           await new Promise((resolve) => setTimeout(resolve, 100));
 
-          const messages = await this.client.get(
+          const messages = await freshchatApi.get(
             `/v2/conversations/${conversation.id}/messages`
           );
           conversation.messages = messages.data.messages || [];
@@ -198,39 +200,108 @@ class FreshchatService {
     };
   }
 
+  async getUser(userId) {
+    try {
+      const response = await freshchatApi.get(`/v2/users/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching Freshchat user:", error);
+      return null;
+    }
+  }
+
+  getEmotionState(message) {
+    const emotions = {
+      mutlu: ["teşekkür", "harika", "güzel", "süper", ":)", "😊", "👍"],
+      üzgün: ["maalesef", "kötü", "olmadı", "yapamadım", ":(", "😢", "👎"],
+      kızgın: ["saçma", "berbat", "rezalet", "çok kötü", "😠", "🤬"],
+      endişeli: ["acaba", "emin değilim", "korkarım", "endişe", "😰", "😨"],
+    };
+
+    message = message.toLowerCase();
+
+    for (const [emotion, keywords] of Object.entries(emotions)) {
+      if (keywords.some((keyword) => message.includes(keyword))) {
+        return emotion;
+      }
+    }
+
+    return "nötr";
+  }
+
+  getUserTone(message) {
+    const tones = {
+      resmi: ["sayın", "rica ederim", "merhaba", "iyi günler", "saygılarımla"],
+      samimi: ["selam", "hey", "dostum", "kardeş", "abi", "abla"],
+      agresif: ["hemen", "derhal", "şimdi", "bekliyorum", "!"],
+    };
+
+    message = message.toLowerCase();
+
+    for (const [tone, keywords] of Object.entries(tones)) {
+      if (keywords.some((keyword) => message.includes(keyword))) {
+        return tone;
+      }
+    }
+
+    return "normal";
+  }
+
+  getPriorityLevel(message) {
+    const urgentKeywords = ["acil", "hemen", "şimdi", "kritik", "önemli"];
+    const highKeywords = ["problem", "sorun", "hata", "yardım", "destek"];
+    const mediumKeywords = ["nasıl", "bilgi", "?", "neden", "nerede"];
+
+    message = message.toLowerCase();
+
+    if (urgentKeywords.some((keyword) => message.includes(keyword))) {
+      return "urgent";
+    } else if (highKeywords.some((keyword) => message.includes(keyword))) {
+      return "high";
+    } else if (mediumKeywords.some((keyword) => message.includes(keyword))) {
+      return "medium";
+    }
+    return "low";
+  }
+
+  getEmojiSuggestion(message) {
+    const emojiMap = {
+      teşekkür: "🙏",
+      harika: "🌟",
+      problem: "❗",
+      yardım: "🆘",
+      nasıl: "❓",
+      tamam: "👍",
+      hayır: "👎",
+      para: "💰",
+      zaman: "⏰",
+      bekle: "⌛",
+      hata: "⚠️",
+      çözüldü: "✅",
+      merhaba: "👋",
+      "güle güle": "👋",
+      "iyi günler": "🌞",
+      "iyi akşamlar": "🌙",
+    };
+
+    message = message.toLowerCase();
+
+    for (const [keyword, emoji] of Object.entries(emojiMap)) {
+      if (message.includes(keyword)) {
+        return emoji;
+      }
+    }
+
+    return "💬";
+  }
+
   async testConnection() {
     try {
-      // First, log the request configuration
-      console.log("Testing connection with config:", {
-        baseURL: this.client.defaults.baseURL,
-        headers: {
-          ...this.client.defaults.headers,
-          Authorization: `Bearer ${config.freshchat.apiKey}`,
-        },
-      });
-
-      const response = await this.client.get("/agents/list"); // Changed to /agents/list endpoint
-      console.log("Connection test successful:", {
-        status: response.status,
-        data: response.data,
-      });
+      await freshchatApi.get("/v2/agents");
       return true;
     } catch (error) {
-      console.error("Connection test failed:", {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        headers: error.response?.headers,
-        url: error.config?.url,
-        method: error.config?.method,
-      });
-
-      // Throw a more detailed error
-      throw new Error(
-        `Freshchat API Error: ${error.response?.status} - ${
-          error.response?.data?.message || error.message
-        }`
-      );
+      console.error("Freshchat connection test failed:", error);
+      return false;
     }
   }
 }

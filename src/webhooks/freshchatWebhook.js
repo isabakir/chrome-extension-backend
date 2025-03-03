@@ -1,7 +1,23 @@
 import express from "express";
 import { freshchatService } from "../services/freshchatService.js";
+import { openaiService } from "../services/openaiService.js";
 
 const router = express.Router();
+
+const systemPrompt = `
+You are a professional and helpful assistant who can analyze the user's message and determine the following information:
+1. The emotional state the message contains or represents (e.g. angry, sad, happy, etc.).
+2. Understanding the tone of the user (e.g. positive, negative, neutral).
+3. Determine the urgency and priority level of the message (e.g. urgent, less urgent, no priority).
+
+Provide the results in the following format so that I can easily process them:
+*State of Emotion:* [State of Emotion]
+*User Tone:* [Tone]
+*Priority Level:* [Priority Level]
+*Emoji Suggestion:* [Emoji]
+
+Please return the answer in a clear, concise and structured way.
+`;
 
 router.post("/freshchat-webhook", async (req, res) => {
   try {
@@ -39,13 +55,11 @@ router.post("/freshchat-webhook", async (req, res) => {
         return res.status(200).json({ message: "Webhook received" });
       }
 
-      // Mesajı analiz et
-      const analysis = {
-        StateOfEmotion: freshchatService.getEmotionState(messageContent),
-        UserTone: freshchatService.getUserTone(messageContent),
-        PriorityLevel: freshchatService.getPriorityLevel(messageContent),
-        EmojiSuggestion: freshchatService.getEmojiSuggestion(messageContent),
-      };
+      // OpenAI ile mesajı analiz et
+      const analysis = await openaiService.analyze(
+        messageContent,
+        systemPrompt
+      );
 
       // Socket.IO üzerinden yayınla
       if (req.io) {

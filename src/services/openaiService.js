@@ -23,6 +23,48 @@ class OpenAIService {
     }
   }
 
+  async analyze(messageContent, systemPrompt) {
+    try {
+      const response = await this.client.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
+            role: "user",
+            content: messageContent,
+          },
+        ],
+      });
+
+      const content = response.choices[0].message.content;
+
+      // Yanıtı parse et
+      const stateMatch = content.match(/\*State of Emotion:\* (.*)/);
+      const toneMatch = content.match(/\*User Tone:\* (.*)/);
+      const priorityMatch = content.match(/\*Priority Level:\* (.*)/);
+      const emojiMatch = content.match(/\*Emoji Suggestion:\* (.*)/);
+
+      return {
+        StateOfEmotion: stateMatch ? stateMatch[1].trim() : "neutral",
+        UserTone: toneMatch ? toneMatch[1].trim() : "neutral",
+        PriorityLevel: priorityMatch ? priorityMatch[1].trim() : "low",
+        EmojiSuggestion: emojiMatch ? emojiMatch[1].trim() : "💬",
+      };
+    } catch (error) {
+      console.error("Error analyzing message with OpenAI:", error);
+      // Hata durumunda varsayılan değerleri döndür
+      return {
+        StateOfEmotion: "neutral",
+        UserTone: "neutral",
+        PriorityLevel: "low",
+        EmojiSuggestion: "💬",
+      };
+    }
+  }
+
   async processConversation(conversation, pastAnswers) {
     try {
       console.log("pastAnswers", pastAnswers);

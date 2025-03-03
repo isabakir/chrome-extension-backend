@@ -22,6 +22,32 @@ import flamingoRouter from "./flamingo/index.js";
 const app = express();
 const server = http.createServer(app);
 
+// CORS ayarları
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
+
+// JSON boyut limitini artır
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// Rate limiter middleware
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 200,
+  standardHeaders: "draft-6",
+  legacyHeaders: false,
+  message: "Too many requests from this IP, please try again later.",
+});
+
+// Helmet middleware for security
+app.use(helmet());
+
 // Socket.IO yapılandırması
 const io = new Server(server, {
   cors: {
@@ -31,10 +57,15 @@ const io = new Server(server, {
     credentials: true,
   },
   path: "/socket.io",
-  transports: ["websocket"],
+  transports: ["websocket", "polling"],
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
+  connectTimeout: 45000,
+  maxHttpBufferSize: 1e8,
+  allowUpgrades: true,
+  serveClient: false,
+  cookie: false,
 });
 
 // Cloudinary yapılandırması
@@ -69,82 +100,10 @@ async function optimizeImage(base64Image) {
   }
 }
 
-// CORS ayarları
-app.use(
-  cors({
-    origin: [
-      "https://wchat.freshchat.com",
-      "https://flalingo.myfreshworks.com",
-      "http://localhost:3000",
-      "chrome-extension://*",
-      "https://globaleducationtechnologyllc-a0a742a7edcc2d017188649.freshchat.com",
-    ],
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  })
-);
-
-// JSON boyut limitini artır
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
-
-// Rate limiter middleware
-const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 200,
-  standardHeaders: "draft-6",
-  legacyHeaders: false,
-  message: "Too many requests from this IP, please try again later.",
-});
-
-// Helmet middleware for security
-app.use(helmet());
-
-// Socket.IO'yu request nesnesine ekle
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
-
-// Rate limiter'ı webhook route'una uygula
-app.use("/webhooks", limiter);
-
-// Initialize webhook routes with proper error handling
-app.use(
-  "/webhooks",
-  (req, res, next) => {
-    console.log("Webhook request received:", {
-      method: req.method,
-      path: req.path,
-      body: req.body,
-      headers: req.headers,
-    });
-    next();
-  },
-  freshchatWebhook
-);
-
-// Error handling middleware for webhooks
-app.use("/webhooks", (err, req, res, next) => {
-  console.error("Webhook error:", err);
-  res.status(500).json({
-    error: "Internal Server Error",
-    message: err.message,
-  });
-});
-
-// Flamingo route'unu ekle
-app.use("/test-flamingo", flamingoRouter);
-
 // Socket.IO bağlantı yönetimi
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  // Test mesajı gönder
-  socket.emit("test", { message: "Bağlantı başarılı!" });
-
-  // Mesaj alma
   socket.on("message", (data) => {
     console.log("Mesaj alındı:", data);
     // Mesajı diğer bağlı clientlara ilet
@@ -162,7 +121,17 @@ io.on("connection", (socket) => {
 
 // Root path handler
 app.get("/", (req, res) => {
-  res.json({ status: "ok", message: "Server is running" });
+  res.json({ status: "ok", message: "Server is running", socketEnabled: true });
+});
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({
+    status: "healthy",
+    uptime: process.uptime(),
+    connections: io.engine.clientsCount,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // New endpoint to trigger historical data import

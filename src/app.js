@@ -56,7 +56,7 @@ const io = new Server(server, {
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   },
-  path: "/socket.io",
+  path: "/socket.io/",
   transports: ["websocket", "polling"],
   allowEIO3: true,
   pingTimeout: 60000,
@@ -66,6 +66,15 @@ const io = new Server(server, {
   allowUpgrades: true,
   serveClient: false,
   cookie: false,
+  handlePreflightRequest: (req, res) => {
+    res.writeHead(200, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Credentials": true,
+    });
+    res.end();
+  },
 });
 
 // Cloudinary yapılandırması

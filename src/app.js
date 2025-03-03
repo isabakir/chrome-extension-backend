@@ -119,6 +119,15 @@ io.on("connection", (socket) => {
   });
 });
 
+// Socket.IO'yu middleware olarak ekle
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+// Webhook route'unu ekle
+app.use("/webhooks", freshchatWebhook);
+
 // Root path handler
 app.get("/", (req, res) => {
   res.json({ status: "ok", message: "Server is running", socketEnabled: true });

@@ -6,8 +6,9 @@ const router = express.Router();
 router.post("/freshchat-webhook", async (req, res) => {
   try {
     const payload = req.body;
-    const actor = payload.actor;
+    console.log("Webhook payload:", payload);
 
+    const actor = payload.actor;
     // Sadece kullanıcıdan gelen mesajları işle
     if (actor.actor_type !== "user" || payload.action !== "message_create") {
       return res.status(200).json({ message: "Webhook received" });
@@ -30,8 +31,13 @@ router.post("/freshchat-webhook", async (req, res) => {
       }
 
       const messageContent = message.message_parts
-        .map((part) => part.text.content)
-        .join(" ");
+        .map((part) => part.text?.content || "")
+        .join(" ")
+        .trim();
+
+      if (!messageContent) {
+        return res.status(200).json({ message: "Webhook received" });
+      }
 
       // Mesajı analiz et
       const analysis = {
@@ -43,21 +49,35 @@ router.post("/freshchat-webhook", async (req, res) => {
 
       // Socket.IO üzerinden yayınla
       if (req.io) {
-        req.io.emit("message", {
-          ...analysis,
+        const messageData = {
           id: message.id,
           message: messageContent,
           created_at: message.created_time,
+          conversation_id: message.conversation_id,
           user: {
+            id: user.id,
             name: `${user?.first_name || ""} ${user?.last_name || ""}`.trim(),
             email: user?.email,
             avatar: user?.avatar?.url,
           },
-          url: `https://flalingo.myfreshworks.com/crm/messaging/a/884923745698942/inbox/3/0/conversation/`,
-        });
+          analysis: analysis,
+          url: `https://flalingo.myfreshworks.com/crm/messaging/conversation/${message.conversation_id}`,
+        };
+
+        console.log("Emitting message:", messageData);
+        req.io.emit("message", messageData);
+      } else {
+        console.warn("Socket.IO instance not found in request object");
       }
 
-      res.status(200).json({ message: "Webhook received" });
+      res.status(200).json({
+        message: "Webhook received",
+        status: "success",
+        data: {
+          message_id: message.id,
+          conversation_id: message.conversation_id,
+        },
+      });
     } catch (error) {
       console.error("Error processing webhook:", error);
       res.status(200).json({ message: "Webhook received" });

@@ -30,20 +30,11 @@ const io = new Server(server, {
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   },
-  path: "/socket.io/",
-  transports: ["websocket", "polling"],
+  path: "/socket.io",
+  transports: ["websocket"],
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
-  handlePreflightRequest: (req, res) => {
-    res.writeHead(200, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Allow-Credentials": true,
-    });
-    res.end();
-  },
 });
 
 // Cloudinary yapılandırması
@@ -167,6 +158,11 @@ io.on("connection", (socket) => {
   socket.on("disconnect", (reason) => {
     console.log("Client disconnected:", socket.id, "Reason:", reason);
   });
+});
+
+// Root path handler
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "Server is running" });
 });
 
 // New endpoint to trigger historical data import

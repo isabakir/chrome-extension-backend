@@ -3,6 +3,9 @@ dotenv.config();
 
 export const config = {
   port: process.env.PORT || 3000,
+  database: {
+    url: process.env.DATABASE_URL,
+  },
   qdrant: {
     url: process.env.QDRANT_URL,
     apiKey: process.env.QDRANT_API_KEY,

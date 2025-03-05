@@ -1,6 +1,7 @@
 import express from "express";
 import { freshchatService } from "../services/freshchatService.js";
 import { openaiService } from "../services/openaiService.js";
+import { db } from "../services/database.js";
 
 const router = express.Router();
 
@@ -25,8 +26,8 @@ router.post("/freshchat-webhook", async (req, res) => {
     console.log("Webhook payload:", payload);
 
     const actor = payload.actor;
-    // Sadece kullanıcıdan gelen mesajları işle
-    if (actor.actor_type !== "user" || payload.action !== "message_create") {
+    // Sadece kullanıcıdan gelen ilk mesajı işle
+    if (actor.actor_type !== "user" && payload.action !== "message_create") {
       return res.status(200).json({ message: "Webhook received" });
     }
 
@@ -61,23 +62,32 @@ router.post("/freshchat-webhook", async (req, res) => {
         systemPrompt
       );
 
+      // Mesaj verisini hazırla
+      const messageData = {
+        id: message.id,
+        message: messageContent,
+        created_at: message.created_time,
+        conversation_id: message.conversation_id,
+        user: {
+          id: user.id,
+          name: `${user?.first_name || ""} ${user?.last_name || ""}`.trim(),
+          email: user?.email,
+          avatar: user?.avatar?.url,
+        },
+        analysis: analysis,
+        url: `https://flalingo.myfreshworks.com/crm/messaging/conversation/${message.conversation_id}`,
+      };
+
+      try {
+        // Mesajı veritabanına kaydet
+        await db.saveMessage(messageData);
+        console.log("Mesaj veritabanına kaydedildi:", messageData.id);
+      } catch (dbError) {
+        console.error("Veritabanı kayıt hatası:", dbError);
+      }
+
       // Socket.IO üzerinden yayınla
       if (req.io) {
-        const messageData = {
-          id: message.id,
-          message: messageContent,
-          created_at: message.created_time,
-          conversation_id: message.conversation_id,
-          user: {
-            id: user.id,
-            name: `${user?.first_name || ""} ${user?.last_name || ""}`.trim(),
-            email: user?.email,
-            avatar: user?.avatar?.url,
-          },
-          analysis: analysis,
-          url: `https://flalingo.myfreshworks.com/crm/messaging/conversation/${message.conversation_id}`,
-        };
-
         console.log("Emitting message:", messageData);
         req.io.emit("message", messageData);
       } else {

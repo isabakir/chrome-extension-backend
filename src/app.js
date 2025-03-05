@@ -6,6 +6,7 @@ import { processingJob } from "./jobs/processingJob.js";
 import { deepseekService } from "./services/deepseekService.js";
 import freshchatWebhook from "./webhooks/freshchatWebhook.js";
 import { openaiService } from "./services/openaiService.js";
+import { db } from "./services/database.js";
 import cors from "cors";
 import fs from "fs";
 import FormData from "form-data";
@@ -113,10 +114,19 @@ async function optimizeImage(base64Image) {
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  socket.on("message", (data) => {
+  socket.on("message", async (data) => {
     console.log("Mesaj alındı:", data);
-    // Mesajı diğer bağlı clientlara ilet
-    socket.broadcast.emit("message", data);
+
+    try {
+      // Mesajı veritabanına kaydet
+      await db.saveMessage(data);
+      console.log("Mesaj veritabanına kaydedildi");
+
+      // Mesajı diğer bağlı clientlara ilet
+      socket.broadcast.emit("message", data);
+    } catch (error) {
+      console.error("Mesaj işlenirken hata oluştu:", error);
+    }
   });
 
   socket.on("error", (error) => {

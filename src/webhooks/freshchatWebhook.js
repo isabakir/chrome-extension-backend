@@ -26,8 +26,29 @@ router.post("/freshchat-webhook", async (req, res) => {
     console.log("Webhook payload:", payload);
 
     const actor = payload.actor;
+
+    // Conversation resolution kontrolü
+    if (payload.action === "conversation_resolution") {
+      const conversationId = payload.data.resolve.conversation.id;
+      const status = payload.data.resolve.conversation.status;
+
+      try {
+        // Messages tablosunda is_resolved'ı güncelle
+        await db.updateMessageResolution(conversationId, status === "resolved");
+        console.log(
+          `Conversation ${conversationId} resolution status updated to: ${status}`
+        );
+        return res.status(200).json({ message: "Resolution status updated" });
+      } catch (error) {
+        console.error("Error updating resolution status:", error);
+        return res
+          .status(200)
+          .json({ message: "Error updating resolution status" });
+      }
+    }
+
     // Sadece kullanıcıdan gelen ilk mesajı işle
-    if (actor.actor_type !== "user" && payload.action !== "message_create") {
+    if (actor.actor_type !== "user" || payload.action !== "message_create") {
       return res.status(200).json({ message: "Webhook received" });
     }
 
@@ -79,9 +100,20 @@ router.post("/freshchat-webhook", async (req, res) => {
       };
 
       try {
-        // Mesajı veritabanına kaydet
-        await db.saveMessage(messageData);
-        console.log("Mesaj veritabanına kaydedildi:", messageData.id);
+        // Önce conversation_id kontrolü yap
+        const existingMessage = await db.getMessageByConversationId(
+          message.conversation_id
+        );
+
+        if (existingMessage) {
+          // Eğer conversation_id varsa message_details'e ekle
+          await db.saveMessageDetail(messageData);
+          console.log("Mesaj detayı kaydedildi:", messageData.id);
+        } else {
+          // Yeni conversation ise messages tablosuna ekle
+          await db.saveMessage(messageData);
+          console.log("Yeni mesaj kaydedildi:", messageData.id);
+        }
       } catch (dbError) {
         console.error("Veritabanı kayıt hatası:", dbError);
       }

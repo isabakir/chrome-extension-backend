@@ -84,12 +84,17 @@ router.post("/freshchat-webhook", async (req, res) => {
         return res.status(200).json({ message: "Webhook received" });
       }
 
-      // OpenAI ile mesajı analiz et
-      const analysis = await openaiService.analyze(
-        messageContent,
-        systemPrompt
+      const existingMessage = await db.getMessageByConversationId(
+        message.conversation_id
       );
 
+      let analysis;
+      if (existingMessage) {
+        // OpenAI ile mesajı analiz et
+        analysis = existingMessage.analysis;
+      } else {
+        analysis = await openaiService.analyze(messageContent, systemPrompt);
+      }
       // Mesaj verisini hazırla
       const messageData = {
         id: message.id,
@@ -111,9 +116,6 @@ router.post("/freshchat-webhook", async (req, res) => {
 
       try {
         // Önce conversation_id kontrolü yap
-        const existingMessage = await db.getMessageByConversationId(
-          message.conversation_id
-        );
 
         if (existingMessage) {
           // Eğer conversation_id varsa message_details'e ekle
@@ -122,18 +124,17 @@ router.post("/freshchat-webhook", async (req, res) => {
         } else {
           // Yeni conversation ise messages tablosuna ekle
           await db.saveMessage(messageData);
+          // Socket.IO üzerinden yayınla
+          if (req.io) {
+            console.log("Emitting message:", messageData);
+            req.io.emit("message", messageData);
+          } else {
+            console.warn("Socket.IO instance not found in request object");
+          }
           console.log("Yeni mesaj kaydedildi:", messageData.id);
         }
       } catch (dbError) {
         console.error("Veritabanı kayıt hatası:", dbError);
-      }
-
-      // Socket.IO üzerinden yayınla
-      if (req.io) {
-        console.log("Emitting message:", messageData);
-        req.io.emit("message", messageData);
-      } else {
-        console.warn("Socket.IO instance not found in request object");
       }
 
       res.status(200).json({

@@ -96,7 +96,7 @@ router.post("/freshchat-webhook", async (req, res) => {
           avatar: user?.avatar?.url,
         },
         analysis: analysis,
-        url: `https://flalingo.myfreshworks.com/crm/messaging/conversation/${message.conversation_id}`,
+        url: `https://flalingo.myfreshworks.com/crm/messaging/conversation/${message.freshchat_conversation_id}`,
       };
 
       try {

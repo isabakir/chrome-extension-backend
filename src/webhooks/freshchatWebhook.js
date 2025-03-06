@@ -29,7 +29,7 @@ router.post("/freshchat-webhook", async (req, res) => {
 
     // Conversation resolution kontrolü
     if (payload.action === "conversation_resolution") {
-      const conversationId = payload.data.resolve.conversation.id;
+      const conversationId = payload.data.resolve.conversation.conversation_id;
       const status = payload.data.resolve.conversation.status;
 
       try {

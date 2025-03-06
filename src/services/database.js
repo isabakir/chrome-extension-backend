@@ -61,6 +61,8 @@ export const db = {
   async getMessages() {
     const query = `
       SELECT * FROM messages 
+      WHERE DATE(created_at) = CURRENT_DATE
+      AND is_resolved = FALSE
       ORDER BY created_at DESC
     `;
 

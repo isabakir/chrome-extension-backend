@@ -136,6 +136,7 @@ io.on("connection", (socket) => {
         url: data.url,
         cf_subscription_id: data.cf_subscription_id || null,
         cf_student_id: data.cf_student_id || null,
+        subscription_type: data.cf_subscription_id ? "support" : "sales",
       };
 
       // Mesajı veritabanına kaydet

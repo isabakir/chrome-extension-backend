@@ -67,6 +67,13 @@ router.post("/freshchat-webhook", async (req, res) => {
       if (userStatus?.value !== "Subscribed") {
         return res.status(200).json({ message: "Webhook received" });
       }
+      const subscriptionId = user.properties.find(
+        (property) => property.name === "cf_subscription_id"
+      )?.value;
+
+      const studentId = user.properties.find(
+        (property) => property.name === "cf_student_id"
+      )?.value;
 
       const messageContent = message.message_parts
         .map((part) => part.text?.content || "")
@@ -97,6 +104,9 @@ router.post("/freshchat-webhook", async (req, res) => {
         },
         analysis: analysis,
         url: `https://globaleducationtechnologyllc-a0a742a7edcc2d017188649.freshchat.com/a/884923745698942/inbox/2/0/conversation/${message.freshchat_conversation_id}`,
+        subscriptionId: subscriptionId,
+        studentId: studentId,
+        subscription_type: subscriptionId ? "support" : "sales",
       };
 
       try {

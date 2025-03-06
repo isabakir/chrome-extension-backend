@@ -69,10 +69,14 @@ export const db = {
   // Mesajları getirme
   async getMessages() {
     const query = `
-      SELECT * FROM messages 
-      WHERE DATE(created_at) = CURRENT_DATE
-      AND is_resolved = FALSE
-      ORDER BY created_at DESC
+      SELECT 
+        m.*,
+        COALESCE(m.cf_subscription_id, '') as cf_subscription_id,
+        COALESCE(m.cf_student_id, '') as cf_student_id
+      FROM messages m
+      WHERE DATE(m.created_at) = CURRENT_DATE
+      AND m.is_resolved = FALSE
+      ORDER BY m.created_at DESC
     `;
 
     try {

@@ -371,9 +371,31 @@ app.post("/api/sendGoogleChat", async (req, res) => {
 app.get("/api/messages", async (req, res) => {
   try {
     const messages = await db.getMessages();
+
+    // Veriyi frontend'in beklediği formata dönüştür
+    const formattedMessages = messages.map((msg) => ({
+      id: msg.id,
+      message: msg.message,
+      created_at: msg.created_at,
+      conversation_id: msg.conversation_id,
+      url: msg.url,
+      is_resolved: msg.is_resolved,
+      user: {
+        id: msg.user_id,
+        name: msg.user_name,
+        email: msg.user_email,
+      },
+      analysis: {
+        StateOfEmotion: msg.state_of_emotion,
+        UserTone: msg.user_tone,
+        PriorityLevel: msg.priority_level,
+        EmojiSuggestion: msg.emoji_suggestion,
+      },
+    }));
+
     res.json({
       success: true,
-      data: messages,
+      data: formattedMessages,
     });
   } catch (error) {
     console.error("Mesajlar getirilirken hata:", error);

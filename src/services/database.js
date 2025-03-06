@@ -30,10 +30,10 @@ export const db = {
 
     const query = `
       INSERT INTO messages (
-        id, message, created_at, conversation_id, 
+        id, message, created_at, conversation_id, freshchat_conversation_id,
         user_id, user_name, user_email,
         state_of_emotion, user_tone, priority_level, emoji_suggestion, url
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       ON CONFLICT (id) DO NOTHING
       RETURNING *
     `;
@@ -43,6 +43,7 @@ export const db = {
       message.message || "",
       message.created_at || new Date().toISOString(),
       message.conversation_id,
+      message.freshchat_conversation_id,
       message.user?.id || null,
       message.user?.name || null,
       message.user?.email || null,

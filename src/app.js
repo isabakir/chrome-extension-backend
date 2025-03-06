@@ -130,6 +130,7 @@ io.on("connection", (socket) => {
         message: data.message || "",
         created_at: data.created_at || new Date().toISOString(),
         conversation_id: data.conversation_id,
+        freshchat_conversation_id: data.freshchat_conversation_id,
         user: data.user || {},
         analysis: data.analysis || {},
         url: data.url,
@@ -378,6 +379,7 @@ app.get("/api/messages", async (req, res) => {
       message: msg.message,
       created_at: msg.created_at,
       conversation_id: msg.conversation_id,
+      freshchat_conversation_id: msg.freshchat_conversation_id,
       url: msg.url,
       is_resolved: msg.is_resolved,
       user: {

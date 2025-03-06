@@ -53,8 +53,8 @@ export const db = {
       message.analysis?.PriorityLevel || null,
       message.analysis?.EmojiSuggestion || null,
       message.url || null,
-      message.cf_subscription_id || null,
-      message.cf_student_id || null,
+      message.subscriptionId || null,
+      message.studentId || null,
     ];
 
     try {

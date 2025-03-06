@@ -23,6 +23,11 @@ export const db = {
 
   // Mesaj kaydetme
   async saveMessage(message) {
+    // Gerekli alanları kontrol et
+    if (!message.id) {
+      throw new Error("Mesaj ID'si gerekli");
+    }
+
     const query = `
       INSERT INTO messages (
         id, message, created_at, conversation_id, 
@@ -35,17 +40,17 @@ export const db = {
 
     const values = [
       message.id,
-      message.message,
-      message.created_at,
+      message.message || "",
+      message.created_at || new Date().toISOString(),
       message.conversation_id,
-      message.user?.id,
-      message.user?.name,
-      message.user?.email,
-      message.analysis?.StateOfEmotion,
-      message.analysis?.UserTone,
-      message.analysis?.PriorityLevel,
-      message.analysis?.EmojiSuggestion,
-      message.url,
+      message.user?.id || null,
+      message.user?.name || null,
+      message.user?.email || null,
+      message.analysis?.StateOfEmotion || null,
+      message.analysis?.UserTone || null,
+      message.analysis?.PriorityLevel || null,
+      message.analysis?.EmojiSuggestion || null,
+      message.url || null,
     ];
 
     try {

@@ -118,12 +118,29 @@ io.on("connection", (socket) => {
     console.log("Mesaj alındı:", data);
 
     try {
+      // Mesaj verisini kontrol et ve düzenle
+      if (!data.id) {
+        console.error("Mesaj ID'si eksik:", data);
+        return;
+      }
+
+      // Mesaj verisini hazırla
+      const messageData = {
+        id: data.id,
+        message: data.message || "",
+        created_at: data.created_at || new Date().toISOString(),
+        conversation_id: data.conversation_id,
+        user: data.user || {},
+        analysis: data.analysis || {},
+        url: data.url,
+      };
+
       // Mesajı veritabanına kaydet
-      await db.saveMessage(data);
-      console.log("Mesaj veritabanına kaydedildi");
+      await db.saveMessage(messageData);
+      console.log("Mesaj veritabanına kaydedildi:", messageData.id);
 
       // Mesajı diğer bağlı clientlara ilet
-      socket.broadcast.emit("message", data);
+      socket.broadcast.emit("message", messageData);
     } catch (error) {
       console.error("Mesaj işlenirken hata oluştu:", error);
     }
@@ -354,10 +371,17 @@ app.post("/api/sendGoogleChat", async (req, res) => {
 app.get("/api/messages", async (req, res) => {
   try {
     const messages = await db.getMessages();
-    res.json(messages);
+    res.json({
+      success: true,
+      data: messages,
+    });
   } catch (error) {
     console.error("Mesajlar getirilirken hata:", error);
-    res.status(500).json({ error: "Mesajlar getirilemedi" });
+    res.status(500).json({
+      success: false,
+      error: "Mesajlar getirilemedi",
+      details: error.message,
+    });
   }
 });
 

@@ -203,6 +203,7 @@ class FreshchatService {
   async getUser(userId) {
     try {
       const response = await freshchatApi.get(`/v2/users/${userId}`);
+      console.log("user+:", response.data);
       return response.data;
     } catch (error) {
       console.error("Error fetching Freshchat user:", error);

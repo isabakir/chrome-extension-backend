@@ -134,6 +134,8 @@ io.on("connection", (socket) => {
         user: data.user || {},
         analysis: data.analysis || {},
         url: data.url,
+        cf_subscription_id: data.cf_subscription_id || null,
+        cf_student_id: data.cf_student_id || null,
       };
 
       // Mesajı veritabanına kaydet
@@ -382,6 +384,8 @@ app.get("/api/messages", async (req, res) => {
       freshchat_conversation_id: msg.freshchat_conversation_id,
       url: msg.url,
       is_resolved: msg.is_resolved,
+      cf_subscription_id: msg.cf_subscription_id,
+      cf_student_id: msg.cf_student_id,
       user: {
         id: msg.user_id,
         name: msg.user_name,

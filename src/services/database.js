@@ -32,8 +32,9 @@ export const db = {
       INSERT INTO messages (
         id, message, created_at, conversation_id, freshchat_conversation_id,
         user_id, user_name, user_email,
-        state_of_emotion, user_tone, priority_level, emoji_suggestion, url
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        state_of_emotion, user_tone, priority_level, emoji_suggestion, url,
+        cf_subscription_id, cf_student_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       ON CONFLICT (id) DO NOTHING
       RETURNING *
     `;
@@ -52,6 +53,8 @@ export const db = {
       message.analysis?.PriorityLevel || null,
       message.analysis?.EmojiSuggestion || null,
       message.url || null,
+      message.cf_subscription_id || null,
+      message.cf_student_id || null,
     ];
 
     try {

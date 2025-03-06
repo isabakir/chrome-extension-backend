@@ -350,6 +350,17 @@ app.post("/api/sendGoogleChat", async (req, res) => {
   }
 });
 
+// API route'ları
+app.get("/api/messages", async (req, res) => {
+  try {
+    const messages = await db.getMessages();
+    res.json(messages);
+  } catch (error) {
+    console.error("Mesajlar getirilirken hata:", error);
+    res.status(500).json({ error: "Mesajlar getirilemedi" });
+  }
+});
+
 // Sunucuyu başlat
 const PORT = process.env.PORT || 3005;
 server.listen(PORT, "0.0.0.0", () => {

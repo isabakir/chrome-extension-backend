@@ -387,6 +387,7 @@ app.get("/api/messages", async (req, res) => {
       is_resolved: msg.is_resolved,
       cf_subscription_id: msg.cf_subscription_id,
       cf_student_id: msg.cf_student_id,
+      subscription_type: msg.cf_subscription_id ? "support" : "sales",
       user: {
         id: msg.user_id,
         name: msg.user_name,

@@ -13,6 +13,9 @@ export const config = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
   },
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY,
+  },
   deepseek: {
     apiKey: process.env.DEEPSEEK_API_KEY,
   },

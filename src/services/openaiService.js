@@ -5,13 +5,14 @@ class OpenAIService {
   constructor() {
     this.client = new OpenAI({
       apiKey: config.openai.apiKey,
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
     });
   }
 
   async createEmbedding(text) {
     try {
       const response = await this.client.embeddings.create({
-        model: "text-embedding-ada-002",
+        model: "gemini-2.0-flash",
         input: text,
         encoding_format: "float",
       });
@@ -69,12 +70,12 @@ class OpenAIService {
     try {
       console.log("pastAnswers", pastAnswers);
       const response = await this.client.chat.completions.create({
-        model: "gpt-4",
+        model: "gemini-2.0-flash",
         messages: [
           {
             role: "system",
             content:
-              "Sen flalingo.com'da çalışan bir müşteri destek operatörü Sibelsin. Gelen mesajlara sibel tarzında cevap ver.Konusma geçmisindeki agent sensin   user kullanıcı.Yazım tarzın  sibel gibi olmalı. Emoji kullanma şeklin de sibel gibi olmalı çok fazla emoji kullanma gerektiği kadar kullan yada hiç kullanma ve bir chat sohbeti gibi olmalı. kullanıcıyla mesajlaşıyorsun mailleşmiyorsun. eğer yeteri kadar veri yoksa ve  cevap üretme daha fazla veriye ihtiyacın oldugunu söyleyebilirsin. Gelen mesajların alakasız oldugunu düşünüyorsan son mesajına cevap ver.",
+              "Sen flalingo.com'da çalışan bir müşteri destek operatörüsün. Gelen mesajlara doğal tarzında cevap ver.Konusma geçmisindeki agent sensin   user kullanıcı.Yazım tarzın  doğal  olmalı. Emoji kullanma şeklin de doğal olmalı çok fazla emoji kullanma gerektiği kadar kullan yada hiç kullanma ve bir chat sohbeti gibi olmalı. kullanıcıyla mesajlaşıyorsun mailleşmiyorsun. eğer yeteri kadar veri yoksa ve  cevap üretme daha fazla veriye ihtiyacın oldugunu söyleyebilirsin. Gelen mesajların alakasız oldugunu düşünüyorsan son mesajına cevap ver.",
           },
           {
             role: "user",

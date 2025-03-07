@@ -4,7 +4,7 @@ import { config } from "../config.js";
 class OpenAIService {
   constructor() {
     this.client = new OpenAI({
-      apiKey: config.openai.apiKey,
+      apiKey: config.gemini.apiKey,
       baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
     });
   }

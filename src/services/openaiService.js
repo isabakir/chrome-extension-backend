@@ -12,7 +12,7 @@ class OpenAIService {
   async createEmbedding(text) {
     try {
       const response = await this.client.embeddings.create({
-        model: "gemini-2.0-flash",
+        model: "text-embedding-004",
         input: text,
         encoding_format: "float",
       });
@@ -27,7 +27,7 @@ class OpenAIService {
   async analyze(messageContent, systemPrompt) {
     try {
       const response = await this.client.chat.completions.create({
-        model: "gpt-4",
+        model: "gemini-2.0-flash",
         messages: [
           {
             role: "system",

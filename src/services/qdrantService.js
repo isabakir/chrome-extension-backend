@@ -15,19 +15,21 @@ class QdrantService {
       // First check if collection exists
       const collections = await this.client.getCollections();
       const collectionExists = collections.collections.some(
-        (collection) => collection.name === "conversations_isa"
+        (collection) => collection.name === "conversations_dimension768"
       );
 
       if (!collectionExists) {
-        await this.client.createCollection("conversations_isa", {
+        await this.client.createCollection("conversations_dimension768", {
           vectors: {
-            size: 1536, // OpenAI embedding dimension
+            size: 768, // OpenAI embedding dimension
             distance: "Cosine",
           },
         });
-        console.log('Collection "conversations_isa" created successfully');
+        console.log(
+          'Collection "conversations_dimension768" created successfully'
+        );
       } else {
-        console.log('Collection "conversations_isa" already exists');
+        console.log('Collection "conversations_dimension768" already exists');
       }
     } catch (error) {
       console.error("Error initializing collection:", error);
@@ -38,7 +40,7 @@ class QdrantService {
   async storeConversation(conversation) {
     try {
       // Check if conversation already exists
-      const existing = await this.client.scroll("conversations_isa", {
+      const existing = await this.client.scroll("conversations_dimension768", {
         filter: {
           must: [{ key: "id", match: { value: conversation.id } }],
         },
@@ -70,7 +72,7 @@ class QdrantService {
       // OpenAI'den embedding al
       const vector = await openaiService.createEmbedding(conversationText);
 
-      await this.client.upsert("conversations_isa", {
+      await this.client.upsert("conversations_dimension768", {
         wait: true,
         points: [
           {
@@ -101,7 +103,7 @@ class QdrantService {
 
   async getConversations(limit = 10, offset = 0) {
     try {
-      const response = await this.client.scroll("conversations_simplified", {
+      const response = await this.client.scroll("conversations_dimension768", {
         filter: {
           must: [
             {
@@ -122,7 +124,7 @@ class QdrantService {
 
   async searchConversations(query, limit = 10) {
     try {
-      const response = await this.client.scroll("conversations_simplified", {
+      const response = await this.client.scroll("conversations_dimension768", {
         filter: {
           must: [
             {
@@ -148,7 +150,7 @@ class QdrantService {
       const queryVector = await openaiService.createEmbedding(query);
 
       // Vektör araması yap
-      const result = await this.client.search("conversations_simplified", {
+      const result = await this.client.search("conversations_dimension768", {
         filter: {
           must: [
             {

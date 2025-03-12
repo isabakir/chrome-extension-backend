@@ -5,6 +5,14 @@ import { db } from "../services/database.js";
 
 const router = express.Router();
 
+// Mesaj önbelleği ve zamanlayıcıları tutmak için nesneler
+const messageBuffers = {}; // conversation_id -> mesaj listesi
+const messageTimers = {}; // conversation_id -> timer
+const processedConversations = new Set(); // İşlenmiş konuşmaları takip etmek için
+
+const INITIAL_DELAY = 30 * 1000; // 30 saniye
+const FOLLOW_UP_DELAY = 10 * 60 * 1000; // 10 dakika
+
 const systemPrompt = `
 You are a professional and helpful assistant who can analyze the user's message and determine the following information:
 1. The emotional state the message contains or represents (e.g. angry, sad, happy, etc.).
@@ -19,6 +27,91 @@ Provide the results in the following format so that I can easily process them:
 
 Please return the answer in a clear, concise and structured way.
 `;
+
+// Mesajları işleme ve gönderme fonksiyonu
+async function processAndSendMessages(conversationId, io) {
+  try {
+    const messages = messageBuffers[conversationId] || [];
+    if (messages.length === 0) return;
+
+    console.log(
+      `${conversationId} konuşması için ${messages.length} mesaj işleniyor...`
+    );
+
+    // Tüm mesajları birleştir
+    const combinedMessage = messages.map((msg) => msg.message).join("\n");
+
+    // OpenAI ile analiz et
+    const analysis = await openaiService.analyze(combinedMessage, systemPrompt);
+
+    // İlk mesajı ana mesaj olarak kaydet
+    const firstMessage = messages[0];
+    firstMessage.analysis = analysis;
+
+    const isNewConversation = !processedConversations.has(conversationId);
+
+    if (isNewConversation) {
+      // Yeni konuşma ise ana mesajı kaydet
+      await db.saveMessage(firstMessage);
+      processedConversations.add(conversationId);
+
+      // Socket.IO üzerinden yayınla
+      if (io) {
+        console.log("Emitting message:", firstMessage);
+        io.emit("message", firstMessage);
+      } else {
+        console.warn("Socket.IO instance not found");
+      }
+      console.log("Yeni mesaj kaydedildi:", firstMessage.id);
+    }
+
+    // Diğer mesajları detay olarak kaydet
+    for (let i = 1; i < messages.length; i++) {
+      await db.saveMessageDetail(messages[i]);
+      console.log("Mesaj detayı kaydedildi:", messages[i].id);
+    }
+
+    // Önbelleği temizle
+    delete messageBuffers[conversationId];
+  } catch (error) {
+    console.error(`Mesajları işlerken hata: ${conversationId}`, error);
+  }
+}
+
+// Mesajı önbelleğe ekle ve zamanlayıcıyı ayarla
+function bufferMessage(message, io) {
+  const conversationId = message.conversation_id;
+
+  // Eğer bu konuşma için bir önbellek yoksa oluştur
+  if (!messageBuffers[conversationId]) {
+    messageBuffers[conversationId] = [];
+  }
+
+  // Mesajı önbelleğe ekle
+  messageBuffers[conversationId].push(message);
+
+  // Eğer mevcut bir zamanlayıcı varsa temizle
+  if (messageTimers[conversationId]) {
+    clearTimeout(messageTimers[conversationId]);
+  }
+
+  // Konuşmanın daha önce işlenip işlenmediğine bağlı olarak bekleme süresini belirle
+  const delay = processedConversations.has(conversationId)
+    ? FOLLOW_UP_DELAY
+    : INITIAL_DELAY;
+
+  // Yeni zamanlayıcı oluştur
+  messageTimers[conversationId] = setTimeout(() => {
+    processAndSendMessages(conversationId, io);
+    delete messageTimers[conversationId];
+  }, delay);
+
+  console.log(
+    `${conversationId} konuşması için ${
+      delay / 1000
+    } saniye zamanlayıcı ayarlandı`
+  );
+}
 
 router.post("/freshchat-webhook", async (req, res) => {
   try {
@@ -47,7 +140,7 @@ router.post("/freshchat-webhook", async (req, res) => {
       }
     }
 
-    // Sadece kullanıcıdan gelen ilk mesajı işle
+    // Sadece kullanıcıdan gelen mesajları işle
     if (actor.actor_type !== "user" || payload.action !== "message_create") {
       return res.status(200).json({ message: "Webhook received" });
     }
@@ -84,58 +177,28 @@ router.post("/freshchat-webhook", async (req, res) => {
         return res.status(200).json({ message: "Webhook received" });
       }
 
-      const existingMessage = await db.getMessageByConversationId(
-        message.conversation_id
-      );
-
-      let analysis;
-      if (existingMessage) {
-        // OpenAI ile mesajı analiz et
-        analysis = existingMessage.analysis;
-      } else {
-        analysis = await openaiService.analyze(messageContent, systemPrompt);
-      }
       // Mesaj verisini hazırla
       const messageData = {
         id: message.id,
         message: messageContent,
         created_at: message.created_time,
         conversation_id: message.conversation_id,
+        freshchat_conversation_id: message.freshchat_conversation_id,
         user: {
           id: user.id,
           name: `${user?.first_name || ""} ${user?.last_name || ""}`.trim(),
           email: user?.email,
           avatar: user?.avatar?.url,
         },
-        analysis: analysis,
+        analysis: null, // Analiz daha sonra yapılacak
         url: `https://globaleducationtechnologyllc-a0a742a7edcc2d017188649.freshchat.com/a/884923745698942/inbox/2/0/conversation/${message.freshchat_conversation_id}`,
         subscriptionId: subscriptionId,
         studentId: studentId,
         subscription_type: subscriptionId ? "support" : "sales",
       };
 
-      try {
-        // Önce conversation_id kontrolü yap
-
-        if (existingMessage) {
-          // Eğer conversation_id varsa message_details'e ekle
-          await db.saveMessageDetail(messageData);
-          console.log("Mesaj detayı kaydedildi:", messageData.id);
-        } else {
-          // Yeni conversation ise messages tablosuna ekle
-          await db.saveMessage(messageData);
-          // Socket.IO üzerinden yayınla
-          if (req.io) {
-            console.log("Emitting message:", messageData);
-            req.io.emit("message", messageData);
-          } else {
-            console.warn("Socket.IO instance not found in request object");
-          }
-          console.log("Yeni mesaj kaydedildi:", messageData.id);
-        }
-      } catch (dbError) {
-        console.error("Veritabanı kayıt hatası:", dbError);
-      }
+      // Mesajı önbelleğe ekle ve zamanlayıcıyı ayarla
+      bufferMessage(messageData, req.io);
 
       res.status(200).json({
         message: "Webhook received",

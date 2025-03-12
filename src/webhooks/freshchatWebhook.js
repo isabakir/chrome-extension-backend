@@ -48,21 +48,42 @@ async function processAndSendMessages(conversationId, io) {
     const firstMessage = messages[0];
     firstMessage.analysis = analysis;
 
-    const isNewConversation = !processedConversations.has(conversationId);
+    // Veritabanında bu konuşma ID'si ile kayıtlı mesaj var mı kontrol et
+    const existingMessage = await db.getMessageByConversationId(conversationId);
 
-    if (isNewConversation) {
+    if (!existingMessage) {
       // Yeni konuşma ise ana mesajı kaydet
-      await db.saveMessage(firstMessage);
-      processedConversations.add(conversationId);
+      try {
+        await db.saveMessage(firstMessage);
+        processedConversations.add(conversationId);
 
-      // Socket.IO üzerinden yayınla
-      if (io) {
-        console.log("Emitting message:", firstMessage);
-        io.emit("message", firstMessage);
-      } else {
-        console.warn("Socket.IO instance not found");
+        // Socket.IO üzerinden yayınla
+        if (io) {
+          console.log("Emitting message:", firstMessage);
+          io.emit("message", firstMessage);
+        } else {
+          console.warn("Socket.IO instance not found");
+        }
+        console.log("Yeni mesaj kaydedildi:", firstMessage.id);
+      } catch (error) {
+        // Eğer kayıt sırasında unique constraint hatası oluşursa, işlemi atla
+        if (
+          error.code === "23505" &&
+          error.constraint === "unique_conversation_id"
+        ) {
+          console.log(
+            `Konuşma ID ${conversationId} zaten kaydedilmiş, yeni kayıt atlanıyor.`
+          );
+          processedConversations.add(conversationId);
+        } else {
+          throw error; // Başka bir hata ise yeniden fırlat
+        }
       }
-      console.log("Yeni mesaj kaydedildi:", firstMessage.id);
+    } else {
+      console.log(
+        `Konuşma ID ${conversationId} zaten mevcut, yeni mesaj detayları kaydediliyor.`
+      );
+      processedConversations.add(conversationId);
     }
 
     // Diğer mesajları detay olarak kaydet

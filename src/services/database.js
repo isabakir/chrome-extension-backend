@@ -28,41 +28,81 @@ export const db = {
       throw new Error("Mesaj ID'si gerekli");
     }
 
-    const query = `
-      INSERT INTO messages (
-        id, message, created_at, conversation_id, freshchat_conversation_id,
-        user_id, user_name, user_email,
-        state_of_emotion, user_tone, priority_level, emoji_suggestion, url,
-        cf_subscription_id, cf_student_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-      ON CONFLICT (id) DO NOTHING
-      RETURNING *
-    `;
+    // Önce bu conversation_id ile kayıt var mı kontrol et
+    const existingMessage = await this.getMessageByConversationId(
+      message.conversation_id
+    );
 
-    const values = [
-      message.id,
-      message.message || "",
-      message.created_at || new Date().toISOString(),
-      message.conversation_id,
-      message.freshchat_conversation_id,
-      message.user?.id || null,
-      message.user?.name || null,
-      message.user?.email || null,
-      message.analysis?.StateOfEmotion || null,
-      message.analysis?.UserTone || null,
-      message.analysis?.PriorityLevel || null,
-      message.analysis?.EmojiSuggestion || null,
-      message.url || null,
-      message.subscriptionId || null,
-      message.studentId || null,
-    ];
+    if (existingMessage) {
+      // Eğer varsa, mevcut kaydı güncelle
+      const updateQuery = `
+        UPDATE messages 
+        SET 
+          message = $1,
+          state_of_emotion = $2,
+          user_tone = $3,
+          priority_level = $4,
+          emoji_suggestion = $5
+        WHERE conversation_id = $6
+        RETURNING *
+      `;
 
-    try {
-      const result = await pool.query(query, values);
-      return result.rows[0];
-    } catch (error) {
-      console.error("Mesaj kaydedilirken hata oluştu:", error);
-      throw error;
+      const updateValues = [
+        message.message || existingMessage.message,
+        message.analysis?.StateOfEmotion || existingMessage.state_of_emotion,
+        message.analysis?.UserTone || existingMessage.user_tone,
+        message.analysis?.PriorityLevel || existingMessage.priority_level,
+        message.analysis?.EmojiSuggestion || existingMessage.emoji_suggestion,
+        message.conversation_id,
+      ];
+
+      try {
+        const result = await pool.query(updateQuery, updateValues);
+        console.log(`Mevcut mesaj güncellendi: ${message.conversation_id}`);
+        return result.rows[0];
+      } catch (error) {
+        console.error("Mesaj güncellenirken hata oluştu:", error);
+        throw error;
+      }
+    } else {
+      // Yeni kayıt ekle
+      const insertQuery = `
+        INSERT INTO messages (
+          id, message, created_at, conversation_id, freshchat_conversation_id,
+          user_id, user_name, user_email,
+          state_of_emotion, user_tone, priority_level, emoji_suggestion, url,
+          cf_subscription_id, cf_student_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        ON CONFLICT (id) DO NOTHING
+        RETURNING *
+      `;
+
+      const insertValues = [
+        message.id,
+        message.message || "",
+        message.created_at || new Date().toISOString(),
+        message.conversation_id,
+        message.freshchat_conversation_id,
+        message.user?.id || null,
+        message.user?.name || null,
+        message.user?.email || null,
+        message.analysis?.StateOfEmotion || null,
+        message.analysis?.UserTone || null,
+        message.analysis?.PriorityLevel || null,
+        message.analysis?.EmojiSuggestion || null,
+        message.url || null,
+        message.subscriptionId || null,
+        message.studentId || null,
+      ];
+
+      try {
+        const result = await pool.query(insertQuery, insertValues);
+        console.log(`Yeni mesaj kaydedildi: ${message.id}`);
+        return result.rows[0];
+      } catch (error) {
+        console.error("Mesaj kaydedilirken hata oluştu:", error);
+        throw error;
+      }
     }
   },
 

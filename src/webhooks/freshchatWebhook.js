@@ -26,7 +26,7 @@ Provide the results in the following format so that I can easily process them:
 *Emoji Suggestion:* [Emoji]
 
 Please return the answer in a clear, concise and structured way.
-You don’t need to prioritize greeting sentences.
+You don’t need to prioritize greeting sentences, as they may come in different languages such as Turkish, English, Arabic, etc., like “Merhaba,” “Hello,” “مرحبا,” or “How are you?”.
 `;
 
 // Mesajları işleme ve gönderme fonksiyonu

@@ -26,6 +26,7 @@ Provide the results in the following format so that I can easily process them:
 *Emoji Suggestion:* [Emoji]
 
 Please return the answer in a clear, concise and structured way.
+You don’t need to prioritize greeting sentences.
 `;
 
 // Mesajları işleme ve gönderme fonksiyonu

@@ -293,6 +293,80 @@ app.post("/api/query", async (req, res) => {
   }
 });
 
+// AI öneri geri bildirimlerini kaydetme endpoint'i
+app.post("/api/feedback", async (req, res) => {
+  try {
+    const {
+      action,
+      suggestion,
+      customer_message,
+      original_suggestion,
+      timestamp,
+      agent_id,
+      conversation_id,
+    } = req.body;
+
+    // Gerekli alanları kontrol et
+    if (!action || !suggestion || !customer_message) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Eksik parametreler: action, suggestion ve customer_message alanları gereklidir",
+      });
+    }
+
+    // Geri bildirimi kaydet
+    const feedback = {
+      action,
+      suggestion,
+      customer_message,
+      original_suggestion: original_suggestion || null,
+      timestamp: timestamp || new Date().toISOString(),
+      agent_id: agent_id || "unknown_agent",
+      conversation_id: conversation_id || "unknown_conversation",
+    };
+
+    const savedFeedback = await db.saveFeedback(feedback);
+
+    // WebSocket ile geri bildirim bilgisini gönder
+    if (req.io) {
+      req.io.emit("feedback", savedFeedback);
+    }
+
+    res.json({
+      success: true,
+      message: "Geri bildirim başarıyla kaydedildi",
+      data: savedFeedback,
+    });
+  } catch (error) {
+    console.error("Geri bildirim kaydedilirken hata oluştu:", error);
+    res.status(500).json({
+      success: false,
+      error: "Geri bildirim kaydedilemedi",
+      details: error.message,
+    });
+  }
+});
+
+// Geri bildirimleri getirme endpoint'i
+app.get("/api/feedback", async (req, res) => {
+  try {
+    const feedbacks = await db.getFeedbacks();
+
+    res.json({
+      success: true,
+      data: feedbacks,
+    });
+  } catch (error) {
+    console.error("Geri bildirimler getirilirken hata oluştu:", error);
+    res.status(500).json({
+      success: false,
+      error: "Geri bildirimler getirilemedi",
+      details: error.message,
+    });
+  }
+});
+
 // Google Chat'e mesaj gönderme endpoint'i
 app.post("/api/sendGoogleChat", async (req, res) => {
   try {

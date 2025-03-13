@@ -114,7 +114,7 @@ export const db = {
         COALESCE(m.cf_subscription_id, '') as cf_subscription_id,
         COALESCE(m.cf_student_id, '') as cf_student_id
       FROM messages m
-      WHERE DATE(m.created_at) = CURRENT_DATE
+      WHERE m.created_at >= '2025-03-13 00:00:00'
       AND m.is_resolved = FALSE
       ORDER BY m.created_at DESC
     `;
@@ -211,6 +211,52 @@ export const db = {
       return result.rows[0];
     } catch (error) {
       console.error("Resolution durumu güncellenirken hata oluştu:", error);
+      throw error;
+    }
+  },
+
+  // Geri bildirim kaydetme
+  async saveFeedback(feedback) {
+    const query = `
+      INSERT INTO feedback (
+        action, suggestion, customer_message, original_suggestion,
+        timestamp, agent_id, conversation_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `;
+
+    const values = [
+      feedback.action,
+      feedback.suggestion,
+      feedback.customer_message,
+      feedback.original_suggestion,
+      feedback.timestamp,
+      feedback.agent_id,
+      feedback.conversation_id,
+    ];
+
+    try {
+      const result = await pool.query(query, values);
+      console.log(`Yeni geri bildirim kaydedildi: ${result.rows[0].id}`);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Geri bildirim kaydedilirken hata oluştu:", error);
+      throw error;
+    }
+  },
+
+  // Geri bildirimleri getirme
+  async getFeedbacks() {
+    const query = `
+      SELECT * FROM feedback
+      ORDER BY timestamp DESC
+    `;
+
+    try {
+      const result = await pool.query(query);
+      return result.rows;
+    } catch (error) {
+      console.error("Geri bildirimler getirilirken hata oluştu:", error);
       throw error;
     }
   },

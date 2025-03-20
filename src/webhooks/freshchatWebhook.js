@@ -144,12 +144,16 @@ router.post("/freshchat-webhook", async (req, res) => {
   try {
     const payload = req.body;
     console.log("Webhook payload:", payload);
-    axios.post(
-      "https://cc15-178-233-20-100.ngrok-free.app/api/fresh-chat-message-webhook",
-      {
-        payload: payload,
-      }
-    );
+    try {
+      axios.post(
+        "https://cc15-178-233-20-100.ngrok-free.app/api/fresh-chat-message-webhook",
+        {
+          payload: payload,
+        }
+      );
+    } catch (error) {
+      console.error("Error sending webhook to ngrok:", error);
+    }
 
     const actor = payload.actor;
 

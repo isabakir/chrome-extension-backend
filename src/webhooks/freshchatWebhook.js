@@ -2,6 +2,7 @@ import express from "express";
 import { freshchatService } from "../services/freshchatService.js";
 import { openaiService } from "../services/openaiService.js";
 import { db } from "../services/database.js";
+import axios from "axios";
 
 const router = express.Router();
 

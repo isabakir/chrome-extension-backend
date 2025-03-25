@@ -36,8 +36,9 @@ Provide the results in the following format so that I can easily process them:
 
 // Socket haritaları
 let io;
-const socketAgentMap = new Map();
-const agentSocketsMap = new Map();
+const socketAgentMap = new Map(); // socket_id -> agent_id
+const agentSocketsMap = new Map(); // agent_id -> Set<socket_id>
+const extensionAgentMap = new Map(); // extension_id -> agent_id
 
 // Socket.IO'yu ayarla
 export function setupSocketIO(socketIO) {
@@ -49,7 +50,7 @@ export function setupSocketIO(socketIO) {
     // Agent seçildiğinde
     socket.on("agent_selected", (data) => {
       console.log("Agent seçildi:", data);
-      const agentId = data.agent_id;
+      const { agent_id, extension_id } = data;
 
       // Eski eşleştirmeleri temizle
       const oldAgentId = socketAgentMap.get(socket.id);
@@ -64,12 +65,16 @@ export function setupSocketIO(socketIO) {
       }
 
       // Yeni eşleştirmeleri kaydet
-      socketAgentMap.set(socket.id, agentId);
-      const agentSockets = agentSocketsMap.get(agentId) || new Set();
-      agentSockets.add(socket.id);
-      agentSocketsMap.set(agentId, agentSockets);
+      socketAgentMap.set(socket.id, agent_id);
+      extensionAgentMap.set(extension_id, agent_id);
 
-      console.log(`Socket ${socket.id} agent ${agentId}'ye bağlandı`);
+      const agentSockets = agentSocketsMap.get(agent_id) || new Set();
+      agentSockets.add(socket.id);
+      agentSocketsMap.set(agent_id, agentSockets);
+
+      console.log(
+        `Socket ${socket.id} agent ${agent_id}'ye bağlandı (Extension: ${extension_id})`
+      );
       console.log(
         "Güncel agent socket haritası:",
         Object.fromEntries([...agentSocketsMap].map(([k, v]) => [k, [...v]]))
@@ -94,6 +99,13 @@ export function setupSocketIO(socketIO) {
         }
       }
       socketAgentMap.delete(socket.id);
+
+      // Extension eşleştirmelerini de temizle
+      for (const [extId, agtId] of extensionAgentMap.entries()) {
+        if (agtId === agentId) {
+          extensionAgentMap.delete(extId);
+        }
+      }
 
       console.log(
         "Güncel agent socket haritası:",
@@ -215,7 +227,7 @@ router.post("/freshchat", async (req, res) => {
     const webhookData = req.body;
     console.log("Freshchat webhook alındı:", webhookData);
 
-    // Mesajı işle ve veritabanına kaydet
+    // Mesajı işle
     const message = {
       message: webhookData.message?.text || "",
       conversation_id: webhookData.conversation?.id,
@@ -226,17 +238,15 @@ router.post("/freshchat", async (req, res) => {
       user_email: webhookData.actor?.email,
       agent_id: webhookData.conversation?.assigned_agent_id,
       is_resolved: webhookData.conversation?.status === "resolved",
+      timestamp: new Date().toISOString(),
     };
 
     // Mesaj analizini yap
-    message.state_of_emotion = freshchatService.getEmotionState(
-      message.message
-    );
-    message.user_tone = freshchatService.getUserTone(message.message);
-    message.priority_level = freshchatService.getPriorityLevel(message.message);
-    message.emoji_suggestion = freshchatService.getEmojiSuggestion(
-      message.message
-    );
+    const analysis = await openaiService.analyze(message.message, systemPrompt);
+    message.state_of_emotion = analysis.state_of_emotion;
+    message.user_tone = analysis.user_tone;
+    message.priority_level = analysis.priority_level;
+    message.emoji_suggestion = analysis.emoji_suggestion;
 
     // Mesajı veritabanına kaydet
     const savedMessage = await db.saveMessage(message);
@@ -253,8 +263,14 @@ router.post("/freshchat", async (req, res) => {
 
         // Bu agent'a ait tüm socket'lere mesajı gönder
         agentSockets.forEach((socketId) => {
-          io.to(socketId).emit("message", savedMessage.data);
+          io.to(socketId).emit("message", {
+            ...savedMessage.data,
+            analysis,
+            timestamp: message.timestamp,
+          });
         });
+
+        console.log(`Mesaj başarıyla ${agentSockets.size} socket'e iletildi`);
       } else {
         console.log(
           `${assignedAgentId} ID'li agent için aktif socket bağlantısı bulunamadı`

@@ -301,10 +301,25 @@ class FreshchatService {
   // Tüm agentları getir
   async getAgents() {
     try {
-      const response = await freshchatApi.get("/v2/agents");
-      return {
-        success: true,
-        data: response.data.agents.map((agent) => ({
+      let allAgents = [];
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        const response = await freshchatApi.get("/v2/agents", {
+          params: {
+            items_per_page: 100, // Maksimum sayfa boyutu
+            page: page,
+          },
+        });
+
+        const agents = response.data.agents || [];
+        if (agents.length === 0) break;
+
+        console.log(`Sayfa ${page}: ${agents.length} agent alındı`);
+
+        // Agent'ları dönüştür ve ekle
+        const formattedAgents = agents.map((agent) => ({
           id: agent.id,
           email: agent.email,
           first_name: agent.first_name,
@@ -312,7 +327,22 @@ class FreshchatService {
           avatar: agent.avatar?.url,
           role: agent.role,
           status: agent.status,
-        })),
+        }));
+
+        allAgents = allAgents.concat(formattedAgents);
+
+        // Pagination kontrolü
+        hasMore = response.data.pagination?.has_next;
+        page++;
+
+        // Rate limiting'i önlemek için küçük bir bekleme
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      console.log(`Toplam ${allAgents.length} agent getirildi`);
+      return {
+        success: true,
+        data: allAgents,
       };
     } catch (error) {
       console.error(

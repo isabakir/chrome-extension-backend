@@ -110,52 +110,22 @@ async function optimizeImage(base64Image) {
   }
 }
 
-// Socket.IO bağlantı yönetimi
+// Socket.IO bağlantıları ve agent eşleştirmelerini tut
+const socketAgentMap = new Map();
+
 io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
+  console.log("Yeni socket bağlantısı:", socket.id);
 
-  socket.on("message", async (data) => {
-    console.log("Mesaj alındı:", data);
-
-    try {
-      // Mesaj verisini kontrol et ve düzenle
-      if (!data.id) {
-        console.error("Mesaj ID'si eksik:", data);
-        return;
-      }
-
-      // Mesaj verisini hazırla
-      const messageData = {
-        id: data.id,
-        message: data.message || "",
-        created_at: data.created_at || new Date().toISOString(),
-        conversation_id: data.conversation_id,
-        freshchat_conversation_id: data.freshchat_conversation_id,
-        user: data.user || {},
-        analysis: data.analysis || {},
-        url: data.url,
-        cf_subscription_id: data.cf_subscription_id || null,
-        cf_student_id: data.cf_student_id || null,
-        subscription_type: data.cf_subscription_id ? "support" : "sales",
-      };
-
-      // Mesajı veritabanına kaydet
-      await db.saveMessage(messageData);
-      console.log("Mesaj veritabanına kaydedildi:", messageData.id);
-
-      // Mesajı diğer bağlı clientlara ilet
-      socket.broadcast.emit("message", messageData);
-    } catch (error) {
-      console.error("Mesaj işlenirken hata oluştu:", error);
-    }
+  // Agent seçildiğinde
+  socket.on("agent_selected", (data) => {
+    console.log("Agent seçildi:", data);
+    socketAgentMap.set(socket.id, data.agent_id);
   });
 
-  socket.on("error", (error) => {
-    console.error("Socket error:", error);
-  });
-
-  socket.on("disconnect", (reason) => {
-    console.log("Client disconnected:", socket.id, "Reason:", reason);
+  // Bağlantı kesildiğinde
+  socket.on("disconnect", () => {
+    console.log("Socket bağlantısı kesildi:", socket.id);
+    socketAgentMap.delete(socket.id);
   });
 });
 
@@ -486,6 +456,70 @@ app.get("/api/messages", async (req, res) => {
       error: "Mesajlar getirilemedi",
       details: error.message,
     });
+  }
+});
+
+// Freshchat agentlarını getir
+app.get("/api/agents", async (req, res) => {
+  try {
+    const result = await freshchatService.getAgents();
+    if (result.success) {
+      res.json({ success: true, data: result.data });
+    } else {
+      res.status(500).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    console.error("Agent listesi getirme hatası:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Agent listesi getirilemedi" });
+  }
+});
+
+// Belirli bir agent'ın detaylarını getir
+app.get("/api/agents/:agentId", async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const result = await freshchatService.getAgentDetails(agentId);
+    if (result.success) {
+      res.json({ success: true, data: result.data });
+    } else {
+      res.status(500).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    console.error("Agent detayları getirme hatası:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Agent detayları getirilemedi" });
+  }
+});
+
+// Mesaj geldiğinde ilgili agent'a ilet
+app.post("/api/messages", async (req, res) => {
+  try {
+    const message = req.body;
+
+    // Mesajı veritabanına kaydet
+    const savedMessage = await saveMessage(message);
+
+    if (savedMessage.success) {
+      // Tüm socket bağlantılarını kontrol et ve ilgili agent'a mesajı ilet
+      io.sockets.sockets.forEach((socket) => {
+        const assignedAgentId = socketAgentMap.get(socket.id);
+
+        // Eğer socket bir agent'a atanmışsa ve mesaj o agent'a aitse
+        if (assignedAgentId && message.agent_id === assignedAgentId) {
+          socket.emit("message", savedMessage.data);
+        }
+      });
+
+      res.json({ success: true, data: savedMessage.data });
+    } else {
+      res.status(500).json({ success: false, error: savedMessage.error });
+    }
+  } catch (error) {
+    console.error("Mesaj kaydetme hatası:", error);
+    res.status(500).json({ success: false, error: "Mesaj kaydedilemedi" });
   }
 });
 

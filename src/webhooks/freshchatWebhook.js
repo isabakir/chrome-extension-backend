@@ -150,6 +150,15 @@ async function processAndSendMessages(conversationId, io) {
 
           // Mesajın atandığı agent'ın socket'lerini bul
           const assignedAgentId = firstMessage.agent_id;
+
+          if (!assignedAgentId) {
+            console.log(
+              "Agent ID bulunamadı, mesaj tüm bağlı socket'lere gönderiliyor"
+            );
+            io.emit("message", firstMessage);
+            return;
+          }
+
           const agentSockets = agentSocketsMap.get(assignedAgentId);
 
           if (agentSockets && agentSockets.size > 0) {
@@ -167,7 +176,7 @@ async function processAndSendMessages(conversationId, io) {
             );
           } else {
             console.log(
-              `${assignedAgentId} ID'li agent için aktif socket bağlantısı bulunamadı`
+              `${assignedAgentId} ID'li agent için aktif socket bağlantısı bulunamadı, mesaj tüm bağlı socket'lere gönderiliyor`
             );
             // Agent'a socket bağlantısı yoksa tüm bağlı socket'lere gönder
             io.emit("message", firstMessage);
@@ -262,6 +271,39 @@ router.post("/freshchat-webhook", async (req, res) => {
 
     const actor = payload.actor;
 
+    // Conversation assignment kontrolü
+    if (payload.action === "conversation_assignment") {
+      const conversationId =
+        payload.data.assignment.conversation.conversation_id;
+      const assignedAgentId =
+        payload.data.assignment.conversation.assigned_agent_id;
+
+      try {
+        // Messages tablosunda agent_id'yi güncelle
+        await db.updateMessageAgent(conversationId, assignedAgentId);
+        console.log(
+          `Conversation ${conversationId} agent ${assignedAgentId}'ye atandı`
+        );
+
+        // Eğer bu konuşma için önbellekte mesaj varsa, agent_id'yi güncelle
+        if (messageBuffers[conversationId]) {
+          messageBuffers[conversationId].forEach((msg) => {
+            msg.agent_id = assignedAgentId;
+          });
+          console.log(
+            `Önbellekteki mesajlar için agent_id güncellendi: ${assignedAgentId}`
+          );
+        }
+
+        return res.status(200).json({ message: "Agent assignment updated" });
+      } catch (error) {
+        console.error("Error updating agent assignment:", error);
+        return res
+          .status(200)
+          .json({ message: "Error updating agent assignment" });
+      }
+    }
+
     // Conversation resolution kontrolü
     if (payload.action === "conversation_resolution") {
       const conversationId = payload.data.resolve.conversation.conversation_id;
@@ -337,8 +379,15 @@ router.post("/freshchat-webhook", async (req, res) => {
         subscriptionId: subscriptionId,
         studentId: studentId,
         subscription_type: subscriptionId ? "support" : "sales",
-        agent_id: message.assigned_agent_id, // Agent ID'sini ekle
+        agent_id: message.assigned_agent_id || message.agent_id || null, // Agent ID'sini ekle
       };
+
+      console.log("Webhook'tan gelen mesaj verisi:", {
+        message_id: message.id,
+        assigned_agent_id: message.assigned_agent_id,
+        agent_id: message.agent_id,
+        conversation_id: message.conversation_id,
+      });
 
       // Mesajı önbelleğe ekle ve zamanlayıcıyı ayarla
       bufferMessage(messageData, req.io);

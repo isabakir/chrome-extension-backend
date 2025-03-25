@@ -199,18 +199,18 @@ export const db = {
 
   // Resolution durumunu güncelleme
   async updateMessageResolution(conversationId, isResolved) {
-    const query = `
-      UPDATE messages 
-      SET is_resolved = $2 
-      WHERE conversation_id = $1 
-      RETURNING *
-    `;
-
     try {
-      const result = await pool.query(query, [conversationId, isResolved]);
+      const query = `
+        UPDATE messages 
+        SET is_resolved = $1,
+            updated_at = NOW()
+        WHERE conversation_id = $2
+        RETURNING *
+      `;
+      const result = await pool.query(query, [isResolved, conversationId]);
       return result.rows[0];
     } catch (error) {
-      console.error("Resolution durumu güncellenirken hata oluştu:", error);
+      console.error("Error updating message resolution:", error);
       throw error;
     }
   },
@@ -257,6 +257,23 @@ export const db = {
       return result.rows;
     } catch (error) {
       console.error("Geri bildirimler getirilirken hata oluştu:", error);
+      throw error;
+    }
+  },
+
+  async updateMessageAgent(conversationId, agentId) {
+    try {
+      const query = `
+        UPDATE messages 
+        SET agent_id = $1,
+            updated_at = NOW()
+        WHERE conversation_id = $2
+        RETURNING *
+      `;
+      const result = await pool.query(query, [agentId, conversationId]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error updating message agent:", error);
       throw error;
     }
   },

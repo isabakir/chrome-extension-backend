@@ -641,6 +641,61 @@ app.post("/api/messages", async (req, res) => {
   }
 });
 
+// Agent'ları Freshchat'ten çekip veritabanına kaydetme endpoint'i
+app.post("/sync/agents", async (req, res) => {
+  try {
+    const response = await fetch("https://api.freshchat.com/v2/agents", {
+      headers: {
+        Authorization: `Bearer ${config.freshchat.apiKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Freshchat API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const agents = data.agents || [];
+
+    // Her agent'ı veritabanına kaydet
+    for (const agent of agents) {
+      await db.saveAgent({
+        id: agent.id,
+        name: `${agent.first_name} ${agent.last_name}`.trim(),
+        email: agent.email,
+        avatar_url: agent.avatar?.url,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `${agents.length} agent başarıyla senkronize edildi`,
+    });
+  } catch (error) {
+    console.error("Agent senkronizasyon hatası:", error);
+    res.status(500).json({
+      success: false,
+      message: "Agent'lar senkronize edilirken hata oluştu",
+      error: error.message,
+    });
+  }
+});
+
+// Agent'ları veritabanından getirme endpoint'i
+app.get("/agents", async (req, res) => {
+  try {
+    const agents = await db.getAgents();
+    res.json(agents);
+  } catch (error) {
+    console.error("Agent'lar getirilirken hata oluştu:", error);
+    res.status(500).json({
+      success: false,
+      message: "Agent'lar getirilirken hata oluştu",
+      error: error.message,
+    });
+  }
+});
+
 // Sunucuyu başlat
 const PORT = process.env.PORT || 3005;
 server.listen(PORT, "0.0.0.0", () => {

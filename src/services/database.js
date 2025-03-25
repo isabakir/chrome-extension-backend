@@ -277,4 +277,58 @@ export const db = {
       throw error;
     }
   },
+
+  // Agent işlemleri
+  async getAgents() {
+    try {
+      const query = `
+        SELECT * FROM agents
+        ORDER BY created_at DESC
+      `;
+      const result = await pool.query(query);
+      return result.rows;
+    } catch (error) {
+      console.error("Error getting agents:", error);
+      throw error;
+    }
+  },
+
+  async getAgentById(id) {
+    try {
+      const query = `
+        SELECT * FROM agents
+        WHERE id = $1
+      `;
+      const result = await pool.query(query, [id]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error getting agent by id:", error);
+      throw error;
+    }
+  },
+
+  async saveAgent(agent) {
+    try {
+      const query = `
+        INSERT INTO agents (id, name, email, avatar_url)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (id) DO UPDATE
+        SET name = EXCLUDED.name,
+            email = EXCLUDED.email,
+            avatar_url = EXCLUDED.avatar_url,
+            updated_at = CURRENT_TIMESTAMP
+        RETURNING *
+      `;
+      const result = await pool.query(query, [
+        agent.id,
+        agent.name,
+        agent.email,
+        agent.avatar_url,
+      ]);
+      return result.rows[0];
+    } catch (error) {
+      console.error("Error saving agent:", error);
+      throw error;
+    }
+  },
 };

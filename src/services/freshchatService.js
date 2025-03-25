@@ -305,6 +305,62 @@ class FreshchatService {
       return false;
     }
   }
+
+  // Tüm agentları getir
+  async getAgents() {
+    try {
+      const response = await freshchatApi.get("/v2/agents");
+      return {
+        success: true,
+        data: response.data.agents.map((agent) => ({
+          id: agent.id,
+          email: agent.email,
+          first_name: agent.first_name,
+          last_name: agent.last_name,
+          avatar: agent.avatar?.url,
+          role: agent.role,
+          status: agent.status,
+        })),
+      };
+    } catch (error) {
+      console.error(
+        "Freshchat agentları getirme hatası:",
+        error.response?.data || error.message
+      );
+      return {
+        success: false,
+        error: "Agentlar getirilemedi",
+      };
+    }
+  }
+
+  // Belirli bir agent'ın detaylarını getir
+  async getAgentDetails(agentId) {
+    try {
+      const response = await freshchatApi.get(`/v2/agents/${agentId}`);
+      return {
+        success: true,
+        data: {
+          id: response.data.id,
+          email: response.data.email,
+          first_name: response.data.first_name,
+          last_name: response.data.last_name,
+          avatar: response.data.avatar?.url,
+          role: response.data.role,
+          status: response.data.status,
+        },
+      };
+    } catch (error) {
+      console.error(
+        "Freshchat agent detayları getirme hatası:",
+        error.response?.data || error.message
+      );
+      return {
+        success: false,
+        error: "Agent detayları getirilemedi",
+      };
+    }
+  }
 }
 
 export const freshchatService = new FreshchatService();

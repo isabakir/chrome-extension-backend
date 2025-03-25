@@ -85,13 +85,13 @@ class FreshchatService {
   async getAllUsers() {
     let userIds = [];
     let page = 1;
-    let i = 1;
-    while (i < 10) {
-      i++;
+    let hasMore = true;
+
+    while (hasMore) {
       try {
         const response = await freshchatApi.get("/v2/users", {
           params: {
-            created_from: "2024-10-01T00:00:00Z", //UTC Format From 1st October 2024, can be changed to any date
+            items_per_page: 100, // Maksimum sayfa boyutu
             page: page,
           },
         });
@@ -99,36 +99,28 @@ class FreshchatService {
         const users = response.data.users || [];
         if (users.length === 0) break;
 
-        console.log("Total users fetched:", response.data);
+        console.log(`Sayfa ${page}: ${users.length} kullanıcı alındı`);
 
-        //STORE USERS'S ids
-        for (const user of users) {
-          userIds.push(user.id);
-        }
+        // Kullanıcı ID'lerini sakla
+        userIds = userIds.concat(users.map((user) => user.id));
 
-        let currentPage = response.data.pagination.current_page;
-        let totalPages = response.data.pagination.total_pages;
+        // Pagination kontrolü
+        const pagination = response.data.pagination;
+        hasMore = pagination.has_next;
+        page++;
 
-        if (currentPage < totalPages) {
-          console.log(
-            `current_page: ${currentPage} > total_pages: ${totalPages}`
-          );
-          page++;
-        } else {
-          console.log(
-            `current_page: ${currentPage} <= total_pages: ${totalPages}`
-          );
-          break;
-        }
-
-        // Add delay to avoid rate limiting
+        // Rate limiting'i önlemek için küçük bir bekleme
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (error) {
-        console.error(`Error fetching users page ${page}:`, error);
+        console.error(
+          `Kullanıcılar getirilirken hata oluştu (Sayfa ${page}):`,
+          error
+        );
         throw error;
       }
     }
 
+    console.log(`Toplam ${userIds.length} kullanıcı getirildi`);
     return userIds;
   }
 

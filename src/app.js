@@ -112,6 +112,7 @@ async function optimizeImage(base64Image) {
 
 // Socket.IO bağlantıları ve agent eşleştirmelerini tut
 const socketAgentMap = new Map();
+const agentSocketsMap = new Map(); // Agent ID'lerine göre socket'leri tut
 
 io.on("connection", (socket) => {
   console.log("Yeni socket bağlantısı:", socket.id);
@@ -119,13 +120,56 @@ io.on("connection", (socket) => {
   // Agent seçildiğinde
   socket.on("agent_selected", (data) => {
     console.log("Agent seçildi:", data);
-    socketAgentMap.set(socket.id, data.agent_id);
+    const agentId = data.agent_id;
+
+    // Eski eşleştirmeleri temizle
+    const oldAgentId = socketAgentMap.get(socket.id);
+    if (oldAgentId) {
+      const agentSockets = agentSocketsMap.get(oldAgentId) || new Set();
+      agentSockets.delete(socket.id);
+      if (agentSockets.size === 0) {
+        agentSocketsMap.delete(oldAgentId);
+      } else {
+        agentSocketsMap.set(oldAgentId, agentSockets);
+      }
+    }
+
+    // Yeni eşleştirmeleri kaydet
+    socketAgentMap.set(socket.id, agentId);
+    const agentSockets = agentSocketsMap.get(agentId) || new Set();
+    agentSockets.add(socket.id);
+    agentSocketsMap.set(agentId, agentSockets);
+
+    console.log(`Socket ${socket.id} agent ${agentId}'ye bağlandı`);
+    console.log(
+      "Güncel agent socket haritası:",
+      Object.fromEntries([...agentSocketsMap].map(([k, v]) => [k, [...v]]))
+    );
   });
 
   // Bağlantı kesildiğinde
   socket.on("disconnect", () => {
     console.log("Socket bağlantısı kesildi:", socket.id);
+
+    // Agent eşleştirmelerini temizle
+    const agentId = socketAgentMap.get(socket.id);
+    if (agentId) {
+      const agentSockets = agentSocketsMap.get(agentId);
+      if (agentSockets) {
+        agentSockets.delete(socket.id);
+        if (agentSockets.size === 0) {
+          agentSocketsMap.delete(agentId);
+        } else {
+          agentSocketsMap.set(agentId, agentSockets);
+        }
+      }
+    }
     socketAgentMap.delete(socket.id);
+
+    console.log(
+      "Güncel agent socket haritası:",
+      Object.fromEntries([...agentSocketsMap].map(([k, v]) => [k, [...v]]))
+    );
   });
 });
 
@@ -500,18 +544,27 @@ app.post("/api/messages", async (req, res) => {
     const message = req.body;
 
     // Mesajı veritabanına kaydet
-    const savedMessage = await saveMessage(message);
+    const savedMessage = await db.saveMessage(message);
 
     if (savedMessage.success) {
-      // Tüm socket bağlantılarını kontrol et ve ilgili agent'a mesajı ilet
-      io.sockets.sockets.forEach((socket) => {
-        const assignedAgentId = socketAgentMap.get(socket.id);
+      // Mesajın atandığı agent'ın socket'lerini bul
+      const assignedAgentId = message.agent_id;
+      const agentSockets = agentSocketsMap.get(assignedAgentId);
 
-        // Eğer socket bir agent'a atanmışsa ve mesaj o agent'a aitse
-        if (assignedAgentId && message.agent_id === assignedAgentId) {
-          socket.emit("message", savedMessage.data);
-        }
-      });
+      if (agentSockets && agentSockets.size > 0) {
+        console.log(
+          `Mesaj ${assignedAgentId} ID'li agent'ın ${agentSockets.size} socket bağlantısına gönderiliyor`
+        );
+
+        // Bu agent'a ait tüm socket'lere mesajı gönder
+        agentSockets.forEach((socketId) => {
+          io.to(socketId).emit("message", savedMessage.data);
+        });
+      } else {
+        console.log(
+          `${assignedAgentId} ID'li agent için aktif socket bağlantısı bulunamadı`
+        );
+      }
 
       res.json({ success: true, data: savedMessage.data });
     } else {

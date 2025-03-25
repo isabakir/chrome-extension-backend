@@ -18,6 +18,7 @@ import helmet from "helmet";
 import { Server } from "socket.io";
 import http from "http";
 import flamingoRouter from "./flamingo/index.js";
+import { setupSocketIO } from "./webhooks/freshchatWebhook.js";
 
 // Express app ve HTTP server oluştur
 const app = express();
@@ -78,6 +79,9 @@ const io = new Server(server, {
   },
 });
 
+// Webhook'u ayarla ve Socket.IO'yu ilet
+setupSocketIO(io);
+
 // Cloudinary yapılandırması
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -109,69 +113,6 @@ async function optimizeImage(base64Image) {
     return base64Image; // Hata durumunda orijinal görüntüyü döndür
   }
 }
-
-// Socket.IO bağlantıları ve agent eşleştirmelerini tut
-const socketAgentMap = new Map();
-const agentSocketsMap = new Map(); // Agent ID'lerine göre socket'leri tut
-
-io.on("connection", (socket) => {
-  console.log("Yeni socket bağlantısı:", socket.id);
-
-  // Agent seçildiğinde
-  socket.on("agent_selected", (data) => {
-    console.log("Agent seçildi:", data);
-    const agentId = data.agent_id;
-
-    // Eski eşleştirmeleri temizle
-    const oldAgentId = socketAgentMap.get(socket.id);
-    if (oldAgentId) {
-      const agentSockets = agentSocketsMap.get(oldAgentId) || new Set();
-      agentSockets.delete(socket.id);
-      if (agentSockets.size === 0) {
-        agentSocketsMap.delete(oldAgentId);
-      } else {
-        agentSocketsMap.set(oldAgentId, agentSockets);
-      }
-    }
-
-    // Yeni eşleştirmeleri kaydet
-    socketAgentMap.set(socket.id, agentId);
-    const agentSockets = agentSocketsMap.get(agentId) || new Set();
-    agentSockets.add(socket.id);
-    agentSocketsMap.set(agentId, agentSockets);
-
-    console.log(`Socket ${socket.id} agent ${agentId}'ye bağlandı`);
-    console.log(
-      "Güncel agent socket haritası:",
-      Object.fromEntries([...agentSocketsMap].map(([k, v]) => [k, [...v]]))
-    );
-  });
-
-  // Bağlantı kesildiğinde
-  socket.on("disconnect", () => {
-    console.log("Socket bağlantısı kesildi:", socket.id);
-
-    // Agent eşleştirmelerini temizle
-    const agentId = socketAgentMap.get(socket.id);
-    if (agentId) {
-      const agentSockets = agentSocketsMap.get(agentId);
-      if (agentSockets) {
-        agentSockets.delete(socket.id);
-        if (agentSockets.size === 0) {
-          agentSocketsMap.delete(agentId);
-        } else {
-          agentSocketsMap.set(agentId, agentSockets);
-        }
-      }
-    }
-    socketAgentMap.delete(socket.id);
-
-    console.log(
-      "Güncel agent socket haritası:",
-      Object.fromEntries([...agentSocketsMap].map(([k, v]) => [k, [...v]]))
-    );
-  });
-});
 
 // Socket.IO'yu middleware olarak ekle
 app.use((req, res, next) => {
@@ -542,34 +483,8 @@ app.get("/api/agents/:agentId", async (req, res) => {
 app.post("/api/messages", async (req, res) => {
   try {
     const message = req.body;
-
-    // Mesajı veritabanına kaydet
     const savedMessage = await db.saveMessage(message);
-
-    if (savedMessage.success) {
-      // Mesajın atandığı agent'ın socket'lerini bul
-      const assignedAgentId = message.agent_id;
-      const agentSockets = agentSocketsMap.get(assignedAgentId);
-
-      if (agentSockets && agentSockets.size > 0) {
-        console.log(
-          `Mesaj ${assignedAgentId} ID'li agent'ın ${agentSockets.size} socket bağlantısına gönderiliyor`
-        );
-
-        // Bu agent'a ait tüm socket'lere mesajı gönder
-        agentSockets.forEach((socketId) => {
-          io.to(socketId).emit("message", savedMessage.data);
-        });
-      } else {
-        console.log(
-          `${assignedAgentId} ID'li agent için aktif socket bağlantısı bulunamadı`
-        );
-      }
-
-      res.json({ success: true, data: savedMessage.data });
-    } else {
-      res.status(500).json({ success: false, error: savedMessage.error });
-    }
+    res.json(savedMessage);
   } catch (error) {
     console.error("Mesaj kaydetme hatası:", error);
     res.status(500).json({ success: false, error: "Mesaj kaydedilemedi" });

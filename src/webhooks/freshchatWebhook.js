@@ -34,6 +34,75 @@ Provide the results in the following format so that I can easily process them:
 *Emoji Suggestion:* [Emoji]
 `;
 
+// Socket haritaları
+let io;
+const socketAgentMap = new Map();
+const agentSocketsMap = new Map();
+
+// Socket.IO'yu ayarla
+export function setupSocketIO(socketIO) {
+  io = socketIO;
+
+  io.on("connection", (socket) => {
+    console.log("Yeni socket bağlantısı:", socket.id);
+
+    // Agent seçildiğinde
+    socket.on("agent_selected", (data) => {
+      console.log("Agent seçildi:", data);
+      const agentId = data.agent_id;
+
+      // Eski eşleştirmeleri temizle
+      const oldAgentId = socketAgentMap.get(socket.id);
+      if (oldAgentId) {
+        const agentSockets = agentSocketsMap.get(oldAgentId) || new Set();
+        agentSockets.delete(socket.id);
+        if (agentSockets.size === 0) {
+          agentSocketsMap.delete(oldAgentId);
+        } else {
+          agentSocketsMap.set(oldAgentId, agentSockets);
+        }
+      }
+
+      // Yeni eşleştirmeleri kaydet
+      socketAgentMap.set(socket.id, agentId);
+      const agentSockets = agentSocketsMap.get(agentId) || new Set();
+      agentSockets.add(socket.id);
+      agentSocketsMap.set(agentId, agentSockets);
+
+      console.log(`Socket ${socket.id} agent ${agentId}'ye bağlandı`);
+      console.log(
+        "Güncel agent socket haritası:",
+        Object.fromEntries([...agentSocketsMap].map(([k, v]) => [k, [...v]]))
+      );
+    });
+
+    // Bağlantı kesildiğinde
+    socket.on("disconnect", () => {
+      console.log("Socket bağlantısı kesildi:", socket.id);
+
+      // Agent eşleştirmelerini temizle
+      const agentId = socketAgentMap.get(socket.id);
+      if (agentId) {
+        const agentSockets = agentSocketsMap.get(agentId);
+        if (agentSockets) {
+          agentSockets.delete(socket.id);
+          if (agentSockets.size === 0) {
+            agentSocketsMap.delete(agentId);
+          } else {
+            agentSocketsMap.set(agentId, agentSockets);
+          }
+        }
+      }
+      socketAgentMap.delete(socket.id);
+
+      console.log(
+        "Güncel agent socket haritası:",
+        Object.fromEntries([...agentSocketsMap].map(([k, v]) => [k, [...v]]))
+      );
+    });
+  });
+}
+
 // Mesajları işleme ve gönderme fonksiyonu
 async function processAndSendMessages(conversationId, io) {
   try {
@@ -140,118 +209,63 @@ function bufferMessage(message, io) {
   );
 }
 
-router.post("/freshchat-webhook", async (req, res) => {
+// Freshchat webhook handler
+router.post("/freshchat", async (req, res) => {
   try {
-    const payload = req.body;
-    console.log("Webhook payload:", payload);
-    try {
-      await axios.post(
-        "https://app.tipbaks.com/api/fresh-chat-message-webhook",
-        {
-          payload: payload,
-        }
-      );
-    } catch (error) {
-      console.error("Error sending webhook to ngrok:", error);
-    }
+    const webhookData = req.body;
+    console.log("Freshchat webhook alındı:", webhookData);
 
-    const actor = payload.actor;
+    // Mesajı işle ve veritabanına kaydet
+    const message = {
+      message: webhookData.message?.text || "",
+      conversation_id: webhookData.conversation?.id,
+      freshchat_conversation_id: webhookData.conversation?.id,
+      url: webhookData.conversation?.app_url,
+      user_id: webhookData.actor?.id,
+      user_name: webhookData.actor?.display_name || "Bilinmeyen Kullanıcı",
+      user_email: webhookData.actor?.email,
+      agent_id: webhookData.conversation?.assigned_agent_id,
+      is_resolved: webhookData.conversation?.status === "resolved",
+    };
 
-    // Conversation resolution kontrolü
-    if (payload.action === "conversation_resolution") {
-      const conversationId = payload.data.resolve.conversation.conversation_id;
-      const status = payload.data.resolve.conversation.status;
+    // Mesaj analizini yap
+    message.state_of_emotion = freshchatService.getEmotionState(
+      message.message
+    );
+    message.user_tone = freshchatService.getUserTone(message.message);
+    message.priority_level = freshchatService.getPriorityLevel(message.message);
+    message.emoji_suggestion = freshchatService.getEmojiSuggestion(
+      message.message
+    );
 
-      try {
-        // Messages tablosunda is_resolved'ı güncelle
-        await db.updateMessageResolution(conversationId, status === "resolved");
+    // Mesajı veritabanına kaydet
+    const savedMessage = await db.saveMessage(message);
+
+    if (savedMessage.success) {
+      // Mesajın atandığı agent'ın socket'lerini bul
+      const assignedAgentId = message.agent_id;
+      const agentSockets = agentSocketsMap.get(assignedAgentId);
+
+      if (agentSockets && agentSockets.size > 0) {
         console.log(
-          `Conversation ${conversationId} resolution status updated to: ${status}`
+          `Mesaj ${assignedAgentId} ID'li agent'ın ${agentSockets.size} socket bağlantısına gönderiliyor`
         );
-        return res.status(200).json({ message: "Resolution status updated" });
-      } catch (error) {
-        console.error("Error updating resolution status:", error);
-        return res
-          .status(200)
-          .json({ message: "Error updating resolution status" });
+
+        // Bu agent'a ait tüm socket'lere mesajı gönder
+        agentSockets.forEach((socketId) => {
+          io.to(socketId).emit("message", savedMessage.data);
+        });
+      } else {
+        console.log(
+          `${assignedAgentId} ID'li agent için aktif socket bağlantısı bulunamadı`
+        );
       }
     }
 
-    // Sadece kullanıcıdan gelen mesajları işle
-    if (actor.actor_type !== "user" || payload.action !== "message_create") {
-      return res.status(200).json({ message: "Webhook received" });
-    }
-
-    const message = payload.data.message;
-
-    try {
-      const user = await freshchatService.getUser(message.user_id);
-
-      if (!user || !user.properties) {
-        return res.status(200).json({ message: "Webhook received" });
-      }
-
-      const userStatus = user.properties.find(
-        (property) => property.name === "cf_user_status"
-      );
-      if (userStatus?.value !== "Subscribed") {
-        return res.status(200).json({ message: "Webhook received" });
-      }
-      const subscriptionId = user.properties.find(
-        (property) => property.name === "cf_subscription_id"
-      )?.value;
-
-      const studentId = user.properties.find(
-        (property) => property.name === "cf_student_id"
-      )?.value;
-
-      const messageContent = message.message_parts
-        .map((part) => part.text?.content || "")
-        .join(" ")
-        .trim();
-
-      if (!messageContent) {
-        return res.status(200).json({ message: "Webhook received" });
-      }
-
-      // Mesaj verisini hazırla
-      const messageData = {
-        id: message.id,
-        message: messageContent,
-        created_at: message.created_time,
-        conversation_id: message.conversation_id,
-        freshchat_conversation_id: message.freshchat_conversation_id,
-        user: {
-          id: user.id,
-          name: `${user?.first_name || ""} ${user?.last_name || ""}`.trim(),
-          email: user?.email,
-          avatar: user?.avatar?.url,
-        },
-        analysis: null, // Analiz daha sonra yapılacak
-        url: `https://globaleducationtechnologyllc-a0a742a7edcc2d017188649.freshchat.com/a/884923745698942/inbox/2/0/conversation/${message.freshchat_conversation_id}`,
-        subscriptionId: subscriptionId,
-        studentId: studentId,
-        subscription_type: subscriptionId ? "support" : "sales",
-      };
-
-      // Mesajı önbelleğe ekle ve zamanlayıcıyı ayarla
-      bufferMessage(messageData, req.io);
-
-      res.status(200).json({
-        message: "Webhook received",
-        status: "success",
-        data: {
-          message_id: message.id,
-          conversation_id: message.conversation_id,
-        },
-      });
-    } catch (error) {
-      console.error("Error processing webhook:", error);
-      res.status(200).json({ message: "Webhook received" });
-    }
+    res.json({ success: true });
   } catch (error) {
-    console.error("Error processing webhook:", error);
-    res.status(200).json({ message: "Webhook received" });
+    console.error("Webhook işleme hatası:", error);
+    res.status(500).json({ success: false, error: "Webhook işlenemedi" });
   }
 });
 

@@ -644,18 +644,13 @@ app.post("/api/messages", async (req, res) => {
 // Agent'ları Freshchat'ten çekip veritabanına kaydetme endpoint'i
 app.post("/sync/agents", async (req, res) => {
   try {
-    const response = await fetch("https://api.freshchat.com/v2/agents", {
-      headers: {
-        Authorization: `Bearer ${config.freshchat.apiKey}`,
-      },
-    });
+    const result = await freshchatService.getAgents();
 
-    if (!response.ok) {
-      throw new Error(`Freshchat API error: ${response.statusText}`);
+    if (!result.success) {
+      throw new Error(result.error);
     }
 
-    const data = await response.json();
-    const agents = data.agents || [];
+    const agents = result.data || [];
 
     // Her agent'ı veritabanına kaydet
     for (const agent of agents) {

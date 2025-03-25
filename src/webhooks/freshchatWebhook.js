@@ -147,7 +147,31 @@ async function processAndSendMessages(conversationId, io) {
         // Socket.IO üzerinden yayınla
         if (io) {
           console.log("Emitting message:", firstMessage);
-          io.emit("message", firstMessage);
+
+          // Mesajın atandığı agent'ın socket'lerini bul
+          const assignedAgentId = firstMessage.agent_id;
+          const agentSockets = agentSocketsMap.get(assignedAgentId);
+
+          if (agentSockets && agentSockets.size > 0) {
+            console.log(
+              `Mesaj ${assignedAgentId} ID'li agent'ın ${agentSockets.size} socket bağlantısına gönderiliyor`
+            );
+
+            // Bu agent'a ait tüm socket'lere mesajı gönder
+            agentSockets.forEach((socketId) => {
+              io.to(socketId).emit("message", firstMessage);
+            });
+
+            console.log(
+              `Mesaj başarıyla ${agentSockets.size} socket'e iletildi`
+            );
+          } else {
+            console.log(
+              `${assignedAgentId} ID'li agent için aktif socket bağlantısı bulunamadı`
+            );
+            // Agent'a socket bağlantısı yoksa tüm bağlı socket'lere gönder
+            io.emit("message", firstMessage);
+          }
         } else {
           console.warn("Socket.IO instance not found");
         }
@@ -313,6 +337,7 @@ router.post("/freshchat-webhook", async (req, res) => {
         subscriptionId: subscriptionId,
         studentId: studentId,
         subscription_type: subscriptionId ? "support" : "sales",
+        agent_id: message.assigned_agent_id, // Agent ID'sini ekle
       };
 
       // Mesajı önbelleğe ekle ve zamanlayıcıyı ayarla

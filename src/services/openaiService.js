@@ -1,6 +1,86 @@
 import OpenAI from "openai";
 import { config } from "../config.js";
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const systemPrompt = `Sen bir müşteri hizmetleri asistanısın. Müşteri mesajlarını analiz et ve aşağıdaki kriterlere göre değerlendir:
+
+1. Duygu Durumu (State of Emotion):
+- Çok Kızgın
+- Kızgın
+- Endişeli
+- Memnun
+- Nötr
+- Üzgün
+- Mutlu
+
+2. Kullanıcı Tonu (User Tone):
+- Agresif
+- Resmi
+- Samimi
+- Profesyonel
+- Kaba
+- Nazik
+- Endişeli
+
+3. Öncelik Seviyesi (Priority Level):
+- Çok Acil
+- Acil
+- Normal
+- Öncelik Yok
+
+4. Emoji Önerisi (Emoji Suggestion):
+- Mesajın duygusal tonuna uygun bir emoji
+
+Lütfen her mesaj için bu dört kriteri belirle ve JSON formatında döndür.`;
+
+export async function analyze(message, customSystemPrompt = systemPrompt) {
+  try {
+    console.log("OpenAI analizi başlatılıyor...");
+    console.log("Mesaj:", message);
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: customSystemPrompt,
+        },
+        {
+          role: "user",
+          content: message,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 150,
+    });
+
+    const response = completion.choices[0].message.content;
+    console.log("OpenAI yanıtı:", response);
+
+    // JSON yanıtını parse et
+    const analysis = JSON.parse(response);
+    console.log("Analiz sonucu:", analysis);
+
+    return {
+      state_of_emotion: analysis.state_of_emotion || "Nötr",
+      user_tone: analysis.user_tone || "Nötr",
+      priority_level: analysis.priority_level || "Normal",
+      emoji_suggestion: analysis.emoji_suggestion || "😐",
+    };
+  } catch (error) {
+    console.error("OpenAI analiz hatası:", error);
+    return {
+      state_of_emotion: "Nötr",
+      user_tone: "Nötr",
+      priority_level: "Normal",
+      emoji_suggestion: "😐",
+    };
+  }
+}
+
 class OpenAIService {
   constructor() {
     this.client = new OpenAI({
@@ -21,48 +101,6 @@ class OpenAIService {
     } catch (error) {
       console.error("Error creating embedding:", error);
       throw error;
-    }
-  }
-
-  async analyze(messageContent, systemPrompt) {
-    try {
-      const response = await this.client.chat.completions.create({
-        model: "gemini-2.0-flash",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: messageContent,
-          },
-        ],
-      });
-
-      const content = response.choices[0].message.content;
-
-      // Yanıtı parse et
-      const stateMatch = content.match(/\*State of Emotion:\* (.*)/);
-      const toneMatch = content.match(/\*User Tone:\* (.*)/);
-      const priorityMatch = content.match(/\*Priority Level:\* (.*)/);
-      const emojiMatch = content.match(/\*Emoji Suggestion:\* (.*)/);
-
-      return {
-        StateOfEmotion: stateMatch ? stateMatch[1].trim() : "neutral",
-        UserTone: toneMatch ? toneMatch[1].trim() : "neutral",
-        PriorityLevel: priorityMatch ? priorityMatch[1].trim() : "low",
-        EmojiSuggestion: emojiMatch ? emojiMatch[1].trim() : "💬",
-      };
-    } catch (error) {
-      console.error("Error analyzing message with OpenAI:", error);
-      // Hata durumunda varsayılan değerleri döndür
-      return {
-        StateOfEmotion: "neutral",
-        UserTone: "neutral",
-        PriorityLevel: "low",
-        EmojiSuggestion: "💬",
-      };
     }
   }
 

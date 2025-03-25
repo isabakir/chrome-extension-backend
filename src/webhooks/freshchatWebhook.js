@@ -241,42 +241,8 @@ router.post("/freshchat", async (req, res) => {
       timestamp: new Date().toISOString(),
     };
 
-    // Mesaj analizini yap
-    const analysis = await openaiService.analyze(message.message, systemPrompt);
-    message.state_of_emotion = analysis.state_of_emotion;
-    message.user_tone = analysis.user_tone;
-    message.priority_level = analysis.priority_level;
-    message.emoji_suggestion = analysis.emoji_suggestion;
-
-    // Mesajı veritabanına kaydet
-    const savedMessage = await db.saveMessage(message);
-
-    if (savedMessage.success) {
-      // Mesajın atandığı agent'ın socket'lerini bul
-      const assignedAgentId = message.agent_id;
-      const agentSockets = agentSocketsMap.get(assignedAgentId);
-
-      if (agentSockets && agentSockets.size > 0) {
-        console.log(
-          `Mesaj ${assignedAgentId} ID'li agent'ın ${agentSockets.size} socket bağlantısına gönderiliyor`
-        );
-
-        // Bu agent'a ait tüm socket'lere mesajı gönder
-        agentSockets.forEach((socketId) => {
-          io.to(socketId).emit("message", {
-            ...savedMessage.data,
-            analysis,
-            timestamp: message.timestamp,
-          });
-        });
-
-        console.log(`Mesaj başarıyla ${agentSockets.size} socket'e iletildi`);
-      } else {
-        console.log(
-          `${assignedAgentId} ID'li agent için aktif socket bağlantısı bulunamadı`
-        );
-      }
-    }
+    // Mesajı önbelleğe ekle
+    bufferMessage(message, io);
 
     res.json({ success: true });
   } catch (error) {

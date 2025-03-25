@@ -146,7 +146,7 @@ router.post("/freshchat-webhook", async (req, res) => {
     console.log("Webhook payload:", payload);
     try {
       await axios.post(
-        "https://8ebd-178-233-20-100.ngrok-free.app/api/fresh-chat-message-webhook",
+        "https://app.tipbaks.com/api/fresh-chat-message-webhook",
         {
           payload: payload,
         }

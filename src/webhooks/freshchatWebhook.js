@@ -47,6 +47,22 @@ export function setupSocketIO(socketIO) {
   io.on("connection", (socket) => {
     console.log("Yeni socket bağlantısı:", socket.id);
 
+    // Test mesajını dinle
+    socket.on("test_message", (data) => {
+      console.log("Test mesajı alındı:", data);
+
+      // Test yanıtı gönder
+      const response = {
+        type: "test_response",
+        message: "Test yanıtı",
+        received: data,
+        timestamp: new Date().toISOString(),
+      };
+
+      console.log("Test yanıtı gönderiliyor:", response);
+      socket.emit("test_response", response);
+    });
+
     // Agent seçildiğinde
     socket.on("agent_selected", (data) => {
       console.log("Agent seçildi:", data);

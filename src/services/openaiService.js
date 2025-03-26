@@ -11,7 +11,7 @@ class OpenAIService {
   async analyze(messageContent, systemPrompt) {
     try {
       const response = await this.client.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gemini-2.0-flash",
         messages: [
           {
             role: "system",
@@ -53,7 +53,7 @@ class OpenAIService {
   async createEmbedding(text) {
     try {
       const response = await this.client.embeddings.create({
-        model: "text-embedding-004",
+        model: "gemini-2.0-flash",
         input: text,
         encoding_format: "float",
       });
@@ -69,7 +69,7 @@ class OpenAIService {
     try {
       console.log("pastAnswers", pastAnswers);
       const response = await this.client.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gemini-2.0-flash",
         messages: [
           {
             role: "system",

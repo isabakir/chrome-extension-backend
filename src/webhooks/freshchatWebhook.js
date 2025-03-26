@@ -45,11 +45,18 @@ export function setupSocketIO(socketIO) {
   io = socketIO;
 
   io.on("connection", (socket) => {
-    console.log("Yeni socket bağlantısı:", socket.id);
+    console.log("==========================================");
+    console.log("🔌 YENİ SOCKET BAĞLANTISI");
+    console.log("Socket ID:", socket.id);
+    console.log("==========================================");
 
     // Test mesajını dinle
     socket.on("test_message", (data) => {
-      console.log("Test mesajı alındı:", data);
+      console.log("==========================================");
+      console.log("📨 TEST MESAJI ALINDI");
+      console.log("Socket ID:", socket.id);
+      console.log("Mesaj:", data);
+      console.log("==========================================");
 
       // Test yanıtı gönder
       const response = {
@@ -59,18 +66,33 @@ export function setupSocketIO(socketIO) {
         timestamp: new Date().toISOString(),
       };
 
-      console.log("Test yanıtı gönderiliyor:", response);
+      console.log("📤 Test yanıtı gönderiliyor:", response);
       socket.emit("test_response", response);
     });
 
     // Agent seçildiğinde
     socket.on("agent_selected", (data) => {
-      console.log("Agent seçildi:", data);
+      console.log("==========================================");
+      console.log("👤 AGENT SEÇİMİ ALINDI");
+      console.log("Socket ID:", socket.id);
+      console.log("Agent Bilgileri:", {
+        agent_id: data.agent_id,
+        agent_name: data.agent_name,
+        agent_email: data.agent_email,
+        extension_id: data.extension_id,
+        timestamp: data.timestamp,
+      });
+      console.log("==========================================");
+
       const { agent_id, extension_id } = data;
 
       // Eski eşleştirmeleri temizle
       const oldAgentId = socketAgentMap.get(socket.id);
       if (oldAgentId) {
+        console.log("🔄 Eski agent eşleştirmesi temizleniyor:", {
+          socket_id: socket.id,
+          old_agent_id: oldAgentId,
+        });
         const agentSockets = agentSocketsMap.get(oldAgentId) || new Set();
         agentSockets.delete(socket.id);
         if (agentSockets.size === 0) {
@@ -88,22 +110,41 @@ export function setupSocketIO(socketIO) {
       agentSockets.add(socket.id);
       agentSocketsMap.set(agent_id, agentSockets);
 
+      console.log("==========================================");
+      console.log("✅ AGENT BAĞLANTISI BAŞARILI");
+      console.log("Socket ID:", socket.id);
+      console.log("Agent ID:", agent_id);
+      console.log("Extension ID:", extension_id);
       console.log(
-        `Socket ${socket.id} agent ${agent_id}'ye bağlandı (Extension: ${extension_id})`
-      );
-      console.log(
-        "Güncel agent socket haritası:",
+        "Güncel Agent Socket Haritası:",
         Object.fromEntries([...agentSocketsMap].map(([k, v]) => [k, [...v]]))
       );
+      console.log("==========================================");
+
+      // Başarılı bağlantı yanıtı gönder
+      socket.emit("agent_selection_response", {
+        success: true,
+        message: "Agent bağlantısı başarılı",
+        agent_id: agent_id,
+        socket_id: socket.id,
+        timestamp: new Date().toISOString(),
+      });
     });
 
     // Bağlantı kesildiğinde
     socket.on("disconnect", () => {
-      console.log("Socket bağlantısı kesildi:", socket.id);
+      console.log("==========================================");
+      console.log("🔌 SOCKET BAĞLANTISI KESİLDİ");
+      console.log("Socket ID:", socket.id);
+      console.log("==========================================");
 
       // Agent eşleştirmelerini temizle
       const agentId = socketAgentMap.get(socket.id);
       if (agentId) {
+        console.log("🔄 Agent eşleştirmesi temizleniyor:", {
+          socket_id: socket.id,
+          agent_id: agentId,
+        });
         const agentSockets = agentSocketsMap.get(agentId);
         if (agentSockets) {
           agentSockets.delete(socket.id);
@@ -123,10 +164,13 @@ export function setupSocketIO(socketIO) {
         }
       }
 
+      console.log("==========================================");
+      console.log("✅ SOCKET TEMİZLİĞİ TAMAMLANDI");
       console.log(
-        "Güncel agent socket haritası:",
+        "Güncel Agent Socket Haritası:",
         Object.fromEntries([...agentSocketsMap].map(([k, v]) => [k, [...v]]))
       );
+      console.log("==========================================");
     });
   });
 }

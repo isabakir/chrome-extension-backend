@@ -198,11 +198,19 @@ async function processAndSendMessages(conversationId, io) {
     // İlk mesajı ana mesaj olarak kaydet
     const firstMessage = messages[0];
     firstMessage.analysis = {
-      PriorityLevel: analysis.PriorityLevel,
-      StateOfEmotion: analysis.StateOfEmotion,
-      UserTone: analysis.UserTone,
-      EmojiSuggestion: analysis.EmojiSuggestion,
+      PriorityLevel: analysis.priority_level,
+      StateOfEmotion: analysis.state_of_emotion,
+      UserTone: analysis.user_tone,
+      EmojiSuggestion: analysis.emoji_suggestion,
     };
+
+    console.log("==========================================");
+    console.log("📝 MESAJ ANALİZ SONUÇLARI");
+    console.log("Priority Level:", firstMessage.analysis.PriorityLevel);
+    console.log("State of Emotion:", firstMessage.analysis.StateOfEmotion);
+    console.log("User Tone:", firstMessage.analysis.UserTone);
+    console.log("Emoji Suggestion:", firstMessage.analysis.EmojiSuggestion);
+    console.log("==========================================");
 
     // Veritabanında bu konuşma ID'si ile kayıtlı mesaj var mı kontrol et
     const existingMessage = await db.getMessageByConversationId(conversationId);

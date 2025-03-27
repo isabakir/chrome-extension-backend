@@ -359,13 +359,19 @@ router.post("/freshchat-webhook", async (req, res) => {
         payload.data.assignment.conversation.assigned_agent_id;
 
       try {
+        console.log("==========================================");
+        console.log("👤 AGENT ATAMA İŞLEMİ");
+        console.log("Conversation ID:", conversationId);
+        console.log("Assigned Agent ID:", assignedAgentId);
+        console.log("==========================================");
+
         // Messages tablosunda agent_id'yi güncelle
         await db.updateMessageAgent(conversationId, assignedAgentId);
         console.log(
           `Conversation ${conversationId} agent ${assignedAgentId}'ye atandı`
         );
 
-        // Eğer bu konuşma için önbellekte mesaj varsa, agent_id'yi güncelle
+        // Eğer bu konuşma için önbellekte mesaj varsa, agent_id'yi güncelle ve mesajı gönder
         if (messageBuffers[conversationId]) {
           messageBuffers[conversationId].forEach((msg) => {
             msg.agent_id = assignedAgentId;
@@ -373,6 +379,28 @@ router.post("/freshchat-webhook", async (req, res) => {
           console.log(
             `Önbellekteki mesajlar için agent_id güncellendi: ${assignedAgentId}`
           );
+
+          // Mesajı direkt olarak atanan agent'ın socket'ine gönder
+          const agentSockets = agentSocketsMap.get(assignedAgentId);
+          if (agentSockets && agentSockets.size > 0) {
+            console.log("==========================================");
+            console.log("📤 MESAJ AGENT'A GÖNDERİLİYOR");
+            console.log("Agent ID:", assignedAgentId);
+            console.log("Socket Sayısı:", agentSockets.size);
+            console.log("Mesaj:", messageBuffers[conversationId][0]);
+            console.log("==========================================");
+
+            agentSockets.forEach((socketId) => {
+              io.to(socketId).emit(
+                "message",
+                messageBuffers[conversationId][0]
+              );
+            });
+
+            console.log("✅ Mesaj agent'a başarıyla gönderildi");
+          } else {
+            console.log("⚠️ Agent için aktif socket bağlantısı bulunamadı");
+          }
         }
 
         return res.status(200).json({ message: "Agent assignment updated" });

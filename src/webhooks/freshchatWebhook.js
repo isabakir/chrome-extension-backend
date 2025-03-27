@@ -190,10 +190,19 @@ async function processAndSendMessages(conversationId, io) {
 
     // OpenAI ile analiz et
     const analysis = await openaiService.analyze(combinedMessage, systemPrompt);
+    console.log("==========================================");
+    console.log("🤖 MESAJ ANALİZİ TAMAMLANDI");
+    console.log("Analiz sonucu:", analysis);
+    console.log("==========================================");
 
     // İlk mesajı ana mesaj olarak kaydet
     const firstMessage = messages[0];
-    firstMessage.analysis = analysis;
+    firstMessage.analysis = {
+      PriorityLevel: analysis.PriorityLevel,
+      StateOfEmotion: analysis.StateOfEmotion,
+      UserTone: analysis.UserTone,
+      EmojiSuggestion: analysis.EmojiSuggestion,
+    };
 
     // Veritabanında bu konuşma ID'si ile kayıtlı mesaj var mı kontrol et
     const existingMessage = await db.getMessageByConversationId(conversationId);
@@ -206,7 +215,10 @@ async function processAndSendMessages(conversationId, io) {
 
         // Socket.IO üzerinden yayınla
         if (io) {
-          console.log("Emitting message:", firstMessage);
+          console.log("==========================================");
+          console.log("📤 SOCKET ÜZERİNDEN MESAJ GÖNDERİLİYOR");
+          console.log("Mesaj:", firstMessage);
+          console.log("==========================================");
 
           // Mesajın atandığı agent'ın socket'lerini bul
           const assignedAgentId = firstMessage.agent_id;
@@ -410,6 +422,9 @@ router.post("/freshchat-webhook", async (req, res) => {
 
       const studentId = user.properties.find(
         (property) => property.name === "cf_student_id"
+      )?.value;
+      const userName = user.properties.find(
+        (property) => property.name === "cf_user_name"
       )?.value;
 
       const messageContent = message.message_parts
